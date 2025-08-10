@@ -21,7 +21,7 @@ from DIHC_FeatureManager.DIHC_FeatureManager import *
 # Reading sample data from the file "signal_data.csv" which is in the same directory as this notebook (or your main python script/notebook)
 #%%
 print(f'Data reading started...')
-sample_df = pd.read_csv('./signal_data.csv')
+sample_df = pd.read_csv('eeg_signal_data.csv')
 print(f'Data reading completed...')
 print(f"Data read from file: ")
 sample_df

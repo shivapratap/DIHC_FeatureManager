@@ -36,6 +36,13 @@ class DIHC_FeatureManager:
         # self.prog_bar = tqdm(total=100, desc=f'Feature manager started...')
         return
 
+    def get_segment_metadata(self):
+        hyp_seg_multiplier = 1
+        seg_len = int(self.segment_length*hyp_seg_multiplier) if self.signal_frequency==None else int(self.segment_length*self.signal_frequency)
+        seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
+        num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
+        return seg_len, seg_mov, num_segs
+
     # ## Segment generater
     def get_segments_for_data(self, data, segment_length=None, segment_overlap=0, signal_frequency=256):
         if len(data)==0:
@@ -43,10 +50,18 @@ class DIHC_FeatureManager:
             exit(0)
             # return
 
+        self.data = data
+        self.segment_length = segment_length
+        self.segment_overlap = segment_overlap
+        self.signal_frequency = signal_frequency
+
         # print('Data segmentation started...')
-        seg_len = int(segment_length * signal_frequency)
-        seg_mov = int(seg_len - (segment_overlap * signal_frequency))
-        num_segs = max(0, int((len(data) - seg_len) / seg_mov + 1))
+        seg_len, seg_mov, num_segs = self.get_segment_metadata()
+
+        # print(f"==================> num_segs: {num_segs}")
+        # seg_len = int(segment_length * signal_frequency)
+        # seg_mov = int(seg_len - (segment_overlap * signal_frequency))
+        # num_segs = max(0, int((len(data) - seg_len) / seg_mov + 1))
         self.prog_bar = tqdm(total=num_segs, desc=f'Data segmentation started...', position=0, file=sys.stdout)
         self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap,
                                                  signal_frequency=signal_frequency)
@@ -81,7 +96,15 @@ class DIHC_FeatureManager:
             exit(0)
             # return
 
-        sampPS = len(data) if segment_length is None else (segment_length*signal_frequency)
+        self.data = data
+        self.segment_length = segment_length
+        self.segment_overlap = segment_overlap
+        self.signal_frequency = signal_frequency
+
+        seg_len, seg_mov, num_segs = self.get_segment_metadata()
+        sampPS = len(data) if segment_length is None else seg_len
+
+        print(f"==================> data: {data.shape} num_segs: {num_segs}, seg_mov: {seg_mov}, seg_len: {seg_len}, sampPS: {sampPS}")
 
         self.feat_extractor = DIHC_FeatureExtractor(manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
                                                     sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut)
@@ -91,14 +114,14 @@ class DIHC_FeatureManager:
             print(f'Dealing with entire signal...')
             all_feat_df= self.feat_extractor.generate_features(1, data, feature_names)
         else:
-            if (segment_length*signal_frequency) > len(data):
+            if seg_len > len(data):
                 print(f'Data can\'t be segmented...')
                 all_feat_df = self.feat_extractor.generate_features(1, data, feature_names)
             else:
                 print(f'Data started segmenting for features: {feature_names}')
-                seg_len = int(segment_length*signal_frequency)
-                seg_mov = int(seg_len-(segment_overlap*signal_frequency))
-                num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
+                # seg_len = int(segment_length*signal_frequency)
+                # seg_mov = int(seg_len-(segment_overlap*signal_frequency))
+                # num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
                 self.prog_bar = tqdm(total=num_segs, desc=f'Feature extraction started...', position=0, file=sys.stdout)
                 self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap, signal_frequency=signal_frequency)
                 seg_generator = self.data_segmenter.generate_segments()
@@ -126,6 +149,11 @@ class DIHC_FeatureManager:
     # ## Validate_segment_data_for_signal_frequency
     def validate_segment_data_for_signal_frequency(self, data, signal_frequency):
         first_shape = len(data[0:])
+
+        if signal_frequency is None:
+            print(f'Signal frequency is None...')
+            return True
+
         for sg in data[:-1, :]:
             if len(sg) != first_shape:
                 return False
@@ -143,14 +171,20 @@ class DIHC_FeatureManager:
             exit(0)
             # return
 
+        segment_length = data[0, :] if signal_frequency==None else data[0, :]/signal_frequency
+        self.data = data
+        self.segment_length = segment_length
+        self.segment_overlap = 0
+        self.signal_frequency = signal_frequency
+
+        seg_len, seg_mov, num_segs = self.get_segment_metadata()
+        sampPS = len(data) if segment_length is None else seg_len
+
         isValid = self.validate_segment_data_for_signal_frequency(data, signal_frequency)
 
         if not isValid:
             print('The segment is not valid...')
             exit(0)
-
-        segment_length = data[0, :]/signal_frequency
-        sampPS = len(data[0]) if segment_length is None else (segment_length*signal_frequency)
 
         self.feat_extractor = DIHC_FeatureExtractor(manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
                                                     sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut)
@@ -178,7 +212,13 @@ class DIHC_FeatureManager:
             exit(0)
             # return
 
-        # sampPS = len(data) if segment_length is None else (segment_length*signal_frequency)
+        self.data = data
+        self.segment_length = segment_length
+        self.segment_overlap = segment_overlap
+        self.signal_frequency = signal_frequency
+
+        seg_len, seg_mov, num_segs = self.get_segment_metadata()
+        # sampPS = len(data) if segment_length is None else seg_len
 
         self.entProf_extractor = DIHC_EntropyProfile()
         all_entProf_df = pd.DataFrame()
@@ -187,14 +227,14 @@ class DIHC_FeatureManager:
             print(f'Dealing with entire signal...')
             all_entProf_df = self.entProf_extractor.generate_sampEn_profile(data)
         else:
-            if (segment_length*signal_frequency) > len(data):
+            if seg_len > len(data):
                 print(f'Data can\'t be segmented...')
                 all_entProf_df = self.entProf_extractor.generate_sampEn_profile(data)
             else:
                 print(f'Entropy profile calculation started...')
-                seg_len = int(segment_length*signal_frequency)
-                seg_mov = int(seg_len-(segment_overlap*signal_frequency))
-                num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
+                # seg_len = int(segment_length*signal_frequency)
+                # seg_mov = int(seg_len-(segment_overlap*signal_frequency))
+                # num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
                 self.prog_bar = tqdm(total=num_segs, desc=f'Entropy profile calculation started...', position=0, file=sys.stdout)
                 self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap, signal_frequency=signal_frequency)
                 seg_generator = self.data_segmenter.generate_segments()

@@ -5,8 +5,9 @@ Involvement: HumachLab & Deakin- Innovation in Healthcare (DIHC)
 Email: wwm.emran@gmail.com, emran.ali@research.deakin.edu.au
 Date: 3/09/2021 7:38 pm
 """
-
+import copy
 from enum import Enum
+
 
 
 class DIHC_FeatureDetails:
@@ -233,21 +234,76 @@ class DIHC_FeatureGroup(Enum):
         return result
 
 
-    # ## Select some specific features manually
     @classmethod
-    def selec_some_specific_features(cls, sel_feature_list):
-        feature_list = [cls.all]  # Use cls instead of self
+    def select_some_specific_features(cls, sel_feature_list=None, rem_feature_list=None):
+        feature_list = [copy.deepcopy(cls.all)]  # Assuming cls.all is the full feature list
         result = []
 
-        # print(f"====>feature_list: {feature_list}\n---->comp_exp_list: {comp_exp_list}")
+        # Remove features based on rem_feature_list if provided
+        if rem_feature_list is not None:
+            for feature_group in feature_list:
+                current_features = feature_group.value
+                filtered_features = [feat for feat in current_features if not any(ff in feat for ff in rem_feature_list)]
+                if filtered_features:
+                    new_member = cls[feature_group.name]  # Assuming you want to add the feature group here
+                    setattr(new_member, '_value_', filtered_features)  # Modify _value_ attribute
+                    result.append(new_member)
+        else:
+            result = copy.deepcopy(feature_list)
 
-        for feature_group in feature_list:
-            current_features = feature_group.value
-            filtered_features = [feat for feat in current_features if feat in sel_feature_list]
-            if filtered_features:
-                new_member = cls[feature_group.name]
-                object.__setattr__(new_member, '_value_', filtered_features)  # Safe way to modify _value_
-                result.append(new_member)
+        feature_list = copy.deepcopy(result)
+        result = []
+
+        # Select specific features based on sel_feature_list if provided
+        if sel_feature_list is not None:
+            for feature_group in feature_list:
+                current_features = feature_group.value
+                filtered_features = [feat for feat in current_features if feat in sel_feature_list]
+                if filtered_features:
+                    new_member = cls[feature_group.name]  # Assuming you want to add the feature group here
+                    setattr(new_member, '_value_', filtered_features)  # Modify _value_ attribute
+                    result.append(new_member)
+        else:
+            result = copy.deepcopy(feature_list)
+
         return result
+
+    #
+    # # ## Select some specific features manually
+    # @classmethod
+    # def select_some_specific_features(cls, sel_feature_list=None, rem_feature_list=None):
+    #     feature_list = [copy.deepcopy(cls.all)]  # Use cls instead of self
+    #     result = []
+    #
+    #     # print(f"====>feature_list: {feature_list}\n---->comp_exp_list: {comp_exp_list}")
+    #
+    #     if rem_feature_list is not None:
+    #         for feature_group in feature_list:
+    #             current_features = feature_group.value
+    #             # filtered_features = [feat for feat in current_features if feat not in rem_feature_list]
+    #             filtered_features = [feat for feat in current_features for ff in rem_feature_list if feat.find(ff)<0]
+    #             if filtered_features:
+    #                 new_member = cls[feature_group.name]
+    #                 object.__setattr__(new_member, '_value_', filtered_features)  # Safe way to modify _value_
+    #                 result.append(new_member)
+    #     else:
+    #         result = copy.deepcopy(feature_list)
+    #     print(f"====>result: {result}")
+    #
+    #     feature_list = copy.deepcopy(result)
+    #     result = []
+    #
+    #     if sel_feature_list is not None:
+    #         for feature_group in feature_list:
+    #             current_features = feature_group.value
+    #             filtered_features = [feat for feat in current_features if feat in sel_feature_list]
+    #             if filtered_features:
+    #                 new_member = cls[feature_group.name]
+    #                 object.__setattr__(new_member, '_value_', filtered_features)  # Safe way to modify _value_
+    #                 result.append(new_member)
+    #     else:
+    #         result = copy.deepcopy(feature_list)
+    #
+    #     return result
 
 

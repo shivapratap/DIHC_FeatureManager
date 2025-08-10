@@ -150,6 +150,10 @@ class DIHC_FeatureExtractor:
         # self.prog_bar
         for feat in prog_bar:
             # print(f"---> {feat}")
+            # if self.signal_frequency==None and ('fd_' in feat or 'entropyProfiled_' in feat or 'spectral' in feat):
+            #     print(f'Signal frequency is not set for feature: {feat}')
+            #     continue
+
             prog_bar.set_description(f"For segment: {seg_srl}, extracting feature: {feat} ||")
             method = None
             final_feat = None

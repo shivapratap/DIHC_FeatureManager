@@ -32,9 +32,7 @@ class DIHC_DataSegmenter:
         self.segment_overlap = segment_overlap
         self.signal_frequency = signal_frequency
         # self.prog_bar = prog_bar
-        seg_len = int(self.segment_length*self.signal_frequency)
-        seg_mov = int(seg_len-(self.segment_overlap*self.signal_frequency))
-        num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
+        self.seg_len, self.seg_mov, self.num_segs = self.get_segment_metadata()
         # print(f'---->> {seg_srl}, {seg_st}, {seg_len}, {seg_mov}')
         # print(f'Segmentation started...')
         # if self.prog_bar is None:
@@ -42,9 +40,16 @@ class DIHC_DataSegmenter:
         # else:
         #     self.prog_bar.set_description(f'Segmentation started...')
 
-        self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...', position=0, file=sys.stdout)
+        self.prog_bar = tqdm(total=self.num_segs, desc=f'Segmentation started...', position=0, file=sys.stdout)
         # self.prog_bar = tqdm(range(num_segs), desc=f'Segmentation started...')
         return
+
+    def get_segment_metadata(self):
+        hyp_seg_multiplier = 1
+        seg_len = int(self.segment_length*hyp_seg_multiplier) if self.signal_frequency==None else int(self.segment_length*self.signal_frequency)
+        seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
+        num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
+        return seg_len, seg_mov, num_segs
 
     # ## Data Segmentor
     def generate_segments(self):
@@ -56,15 +61,16 @@ class DIHC_DataSegmenter:
         if self.segment_length is None:
             print(f'Dealing with entire signal...')
         else:
-            if (self.segment_length*self.signal_frequency) > len(self.data):
+            if self.seg_len > len(self.data):
                 print(f'Data can\'t be segmented...')
                 return self.data
             else:
                 seg_srl = 1
                 seg_st = 0
-                seg_len = int(self.segment_length*self.signal_frequency)
-                seg_mov = int(seg_len-(self.segment_overlap*self.signal_frequency))
-                num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
+                # seg_len, seg_mov, num_segs = self.get_segment_metadata()
+                seg_len = self.seg_len
+                seg_mov = self.seg_mov
+                num_segs = self.num_segs
                 # print(f'---->> {seg_srl}, {seg_st}, {seg_len}, {seg_mov}')
                 # print(f'Segmentation started...')
                 # if self.prog_bar is None:
