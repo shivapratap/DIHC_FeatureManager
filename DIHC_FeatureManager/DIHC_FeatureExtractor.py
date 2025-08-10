@@ -244,7 +244,9 @@ class DIHC_FeatureExtractor:
             # feat_val = round(feat_val, 16)
             # print(f'{feat} -- {feat_val}')
             feature_values.append([feat_val])
+
         prog_bar.set_description(f"Feature extraction finished...")
+        prog_bar.close()
 
         # print(f'{feature_names} -- {feature_values}')
         np_feat_value = np.array(feature_values)
