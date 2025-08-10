@@ -367,12 +367,20 @@ class DIHC_FeatureExtractor:
 
     ### positiveToNegativeSampleRatio value of the segment
     def positiveToNegativeSampleRatio(self, data):
-        pnSampRatio = (np.sum(np.array(data) >= 0, axis=0)) / (np.sum(np.array(data) < 0, axis=0))
+        pnSampRatio = 0
+        try:
+            pnSampRatio = (np.sum(np.array(data) >= 0, axis=0)) / (np.sum(np.array(data) < 0, axis=0))
+        except ZeroDivisionError:
+            pnSampRatio = 0
         return pnSampRatio
 
     ### positiveToNegativeSampleRatio value of the segment
     def positiveToNegativePeakRatio(self, data):
-        pnPeakRatio = (len(sig.find_peaks(data))) / (len(sig.find_peaks(-data)))
+        pnPeakRatio = 0
+        try:
+            pnPeakRatio = (len(sig.find_peaks(data))) / (len(sig.find_peaks(-data)))
+        except ZeroDivisionError:
+            pnPeakRatio = 0
         return pnPeakRatio
 
     ### meanAbsoluteValue value of the segment
@@ -431,19 +439,35 @@ class DIHC_FeatureExtractor:
         return lzc
 
     def petrosianFd(self, data):
-        pfd = petrosian_fd(data)
+        pfd = 0
+        try:
+            pfd = petrosian_fd(data)
+        except ZeroDivisionError:
+            pfd = 0
         return pfd
 
     def katzFd(self, data):
-        kfd = katz_fd(data)
+        kfd = 0
+        try:
+            kfd = katz_fd(data)
+        except ZeroDivisionError:
+            kfd = 0
         return kfd
 
     def higuchiFd(self, data):
-        hfd = higuchi_fd(data)
+        hfd = 0
+        try:
+            hfd = higuchi_fd(data)
+        except ZeroDivisionError:
+            hfd = 0
         return hfd
 
     def detrendedFluctuation(self, data):
-        dfl = detrended_fluctuation(data)
+        dfl = 0
+        try:
+            dfl = detrended_fluctuation(data)
+        except ZeroDivisionError:
+            dfl = 0
         return dfl 
     
 

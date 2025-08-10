@@ -104,7 +104,7 @@ class DIHC_FeatureManager:
         seg_len, seg_mov, num_segs = self.get_segment_metadata()
         sampPS = len(data) if segment_length is None else seg_len
 
-        print(f"==================> data: {data.shape} num_segs: {num_segs}, seg_mov: {seg_mov}, seg_len: {seg_len}, sampPS: {sampPS}")
+        # print(f"==================> data: {data.shape} num_segs: {num_segs}, seg_mov: {seg_mov}, seg_len: {seg_len}, sampPS: {sampPS}")
 
         self.feat_extractor = DIHC_FeatureExtractor(manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
                                                     sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut)
