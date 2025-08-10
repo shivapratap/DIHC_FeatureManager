@@ -24,6 +24,8 @@ from mne.time_frequency import psd_array_multitaper
 from scipy import fft, fftpack
 # from math import log, floor
 import math
+import sys
+import  tqdm
 
 from antropy import *
 import pyeeg
@@ -49,8 +51,9 @@ from DIHC_FeatureManager.DIHC_FeatureDetails import DIHC_FeatureGroup
 ###
 class DIHC_EntropyProfile:
 
-    def __init__(self):
+    def __init__(self, varbose_progress=False):
         # self.entropy_profile = None
+        self.varbose_progress = varbose_progress
         return 
 
 
@@ -61,6 +64,12 @@ class DIHC_EntropyProfile:
         # seg_values = seg_data.copy()
         # final_data = seg_values.copy()
         final_data = seg_data.copy()
+
+        # if self.varbose_progress:
+        #     self.prog_bar = tqdm(total=self.num_segs, desc=f'Segmentation started...', position=0, file=sys.stdout)
+        #     # self.prog_bar = tqdm(range(num_segs), desc=f'Segmentation started...')
+        # else:
+        #     print(f'Segmentation started...')
 
         enProf = self.get_sample_entropy_profile(final_data)
         dat = np.asarray(enProf)

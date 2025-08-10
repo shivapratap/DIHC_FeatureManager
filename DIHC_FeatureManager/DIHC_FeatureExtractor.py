@@ -60,7 +60,7 @@ from DIHC_FeatureManager.DIHC_FeatureDetails import DIHC_FeatureGroup
 ###
 class DIHC_FeatureExtractor:
 
-    def __init__(self, manage_exceptional_data=0, signal_frequency = 256, sample_per_second=1280, filtering_enabled=False, lowcut=1, highcut=48):
+    def __init__(self, manage_exceptional_data=0, signal_frequency = 256, sample_per_second=1280, filtering_enabled=False, lowcut=1, highcut=48, varbose_progress=False):
         self.manage_exceptional_data = manage_exceptional_data
 
         self.td_linear_statistical = DIHC_FeatureDetails.td_linear_statistical
@@ -94,6 +94,7 @@ class DIHC_FeatureExtractor:
 
         self.fd_data_dict = None
         self.entropy_profile = None
+        self.varbose_progress = varbose_progress
 
         return
 
@@ -145,16 +146,23 @@ class DIHC_FeatureExtractor:
             feature_names = [it for it in all_feature_names if it in feature_names_copy] 
 
         # Generate corresponding features
-        prog_bar = tqdm(feature_names, desc="Feature extraction started...")
-        # self.prog_bar.set_description("Feature extraction started...")
+        if self.varbose_progress:
+            prog_bar = tqdm(feature_names, desc="Feature extraction started...")
+            # self.prog_bar.set_description("Feature extraction started...")
+        else:
+            print(f"Feature extraction started...")
         # self.prog_bar
-        for feat in prog_bar:
+        feature_iterator = prog_bar if self.varbose_progress else feature_names
+        for feat in feature_iterator:
             # print(f"---> {feat}")
             # if self.signal_frequency==None and ('fd_' in feat or 'entropyProfiled_' in feat or 'spectral' in feat):
             #     print(f'Signal frequency is not set for feature: {feat}')
             #     continue
 
-            prog_bar.set_description(f"For segment: {seg_srl}, extracting feature: {feat} ||")
+            if self.varbose_progress:
+                prog_bar.set_description(f"For segment: {seg_srl}, extracting feature: {feat} ||")
+            else:
+                print(f"For segment: {seg_srl}, extracting feature: {feat} ")
             method = None
             final_feat = None
             try:
@@ -249,8 +257,11 @@ class DIHC_FeatureExtractor:
             # print(f'{feat} -- {feat_val}')
             feature_values.append([feat_val])
 
-        prog_bar.set_description(f"Feature extraction finished...")
-        prog_bar.close()
+        if self.varbose_progress:
+            prog_bar.set_description(f"Feature extraction finished...")
+            prog_bar.close()
+        else:
+            print(f"Feature extraction finished...")
 
         # print(f'{feature_names} -- {feature_values}')
         np_feat_value = np.array(feature_values)
@@ -518,7 +529,11 @@ class DIHC_FeatureExtractor:
     def fuzzyEntropy(self, data,  m=2, tau=1, r=0.2):
         data = np.asarray(data).flatten()
         # data = data.astype(np.float64)
-        fuzz_ent = compute_fuzzy_entropy_jit(data, m, tau, r)
+        fuzz_ent = 0
+        try:
+            fuzz_ent = compute_fuzzy_entropy_jit(data, m, tau, r)
+        except:
+            fuzz_ent = 0
         return fuzz_ent
 
 

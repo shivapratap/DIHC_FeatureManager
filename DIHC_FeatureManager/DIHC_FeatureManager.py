@@ -28,11 +28,12 @@ from DIHC_FeatureManager.DIHC_DataSegmenter import *
 class DIHC_FeatureManager:
 
     # ## Initialization
-    def __init__(self):
+    def __init__(self, varbose_progress=False):
         self.data_segmenter = None
         self.feat_extractor = None
         self.feat_selector = None
         self.prog_bar = None
+        self.varbose_progress = varbose_progress
         # self.prog_bar = tqdm(total=100, desc=f'Feature manager started...')
         return
 
@@ -62,29 +63,41 @@ class DIHC_FeatureManager:
         # seg_len = int(segment_length * signal_frequency)
         # seg_mov = int(seg_len - (segment_overlap * signal_frequency))
         # num_segs = max(0, int((len(data) - seg_len) / seg_mov + 1))
-        self.prog_bar = tqdm(total=num_segs, desc=f'Data segmentation started...', position=0, file=sys.stdout)
+        if self.varbose_progress:
+            self.prog_bar = tqdm(total=num_segs, desc=f'Data segmentation started...', position=0, file=sys.stdout)
+        else:
+            print(f'Data segmentation started...')
         self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap,
-                                                 signal_frequency=signal_frequency)
+                                                 signal_frequency=signal_frequency, varbose_progress=self.varbose_progress)
         seg_generator = self.data_segmenter.generate_segments()
         seg_srl = 0
         all_seg_data = np.array([])
         while True:
             try:
-                self.prog_bar.set_description(f'Generating segments #{seg_srl+1} ||')
+                if self.varbose_progress:
+                    self.prog_bar.set_description(f'Generating segments #{seg_srl+1} ||')
+                else:
+                    print(f'Generating segments #{seg_srl+1} ')
                 seg_data = next(seg_generator)
                 if seg_srl==0:
                     all_seg_data = np.array(seg_data)
                 else:
                     all_seg_data = np.vstack([all_seg_data, seg_data])
                 seg_srl += 1
-                self.prog_bar.update(1.0)
+                if self.varbose_progress:
+                    self.prog_bar.update(1.0)
             except StopIteration:
-                # print('Finished segmentation of data...')
-                # self.prog_bar.set_description(f'Finished segmentation of data...')
+                # if self.varbose_progress:
+                #     self.prog_bar.set_description(f'Finished segmentation of data...')
+                # else:
+                #     print(f'Finished segmentation of data...')
                 break
         # print('Finished segmentation of data...')
-        self.prog_bar.set_description(f'Finished segmentation of data...')
-        self.prog_bar.close()
+        if self.varbose_progress:
+            self.prog_bar.set_description(f'Finished segmentation of data...')
+            self.prog_bar.close()
+        else:
+            print(f'Finished segmentation of data...')
         return all_seg_data
 
 
@@ -107,7 +120,8 @@ class DIHC_FeatureManager:
         # print(f"==================> data: {data.shape} num_segs: {num_segs}, seg_mov: {seg_mov}, seg_len: {seg_len}, sampPS: {sampPS}")
 
         self.feat_extractor = DIHC_FeatureExtractor(manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
-                                                    sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut)
+                                                    sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut,
+                                                    varbose_progress=self.varbose_progress)
         all_feat_df = pd.DataFrame()
 
         if segment_length is None:
@@ -122,27 +136,39 @@ class DIHC_FeatureManager:
                 # seg_len = int(segment_length*signal_frequency)
                 # seg_mov = int(seg_len-(segment_overlap*signal_frequency))
                 # num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
-                self.prog_bar = tqdm(total=num_segs, desc=f'Feature extraction started...', position=0, file=sys.stdout)
-                self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap, signal_frequency=signal_frequency)
+                if self.varbose_progress:
+                    self.prog_bar = tqdm(total=num_segs, desc=f'Feature extraction started...', position=0, file=sys.stdout)
+                else:
+                    print(f'Feature extraction started...')
+                self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap,
+                                                         signal_frequency=signal_frequency, varbose_progress=self.varbose_progress)
                 seg_generator = self.data_segmenter.generate_segments()
                 seg_srl = 0
                 while True:
                     try:
-                        self.prog_bar.set_description(f'Extracting features for segment# {seg_srl+1} ||')
+                        if self.varbose_progress:
+                            self.prog_bar.set_description(f'Extracting features for segment# {seg_srl+1} ')
+                        else:
+                            print(f'Extracting features for segment# {seg_srl+1} ||')
                         seg_data = next(seg_generator)
                         # print('SEG data', seg_data)
                         feat_df = self.feat_extractor.generate_features(seg_srl+1, seg_data, feature_names)
                         all_feat_df = pd.concat([all_feat_df, feat_df])
                         all_feat_df = all_feat_df.reset_index(drop=True)
-                        self.prog_bar.update(1.0)
+                        if self.varbose_progress:
+                            self.prog_bar.update(1.0)
                     except StopIteration:
-                        # print('Finished extracting features for all segments...')
-                        # self.prog_bar.set_description(f'Finished extracting features for all segments...')
+                        # if self.varbose_progress:
+                        #     self.prog_bar.set_description(f'Finished extracting features for all segments...')
+                        # else:
+                        #     print(f'Finished extracting features for all segments...')
                         break
                     seg_srl+=1
-                # print('Finished extracting features for all segments...')
-                self.prog_bar.set_description(f'Finished extracting features for all segments...')
-                self.prog_bar.close()
+                if self.varbose_progress:
+                    self.prog_bar.set_description(f'Finished extracting features for all segments...')
+                    self.prog_bar.close()
+                else:
+                    print(f'Finished extracting features for all segments...')
         return all_feat_df
 
 
@@ -187,20 +213,31 @@ class DIHC_FeatureManager:
             exit(0)
 
         self.feat_extractor = DIHC_FeatureExtractor(manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
-                                                    sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut)
+                                                    sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut,
+                                                    highcut=highcut, varbose_progress=self.varbose_progress)
         all_feat_df = pd.DataFrame()
 
-        self.prog_bar = tqdm(total=len(data), desc=f'Feature extraction started...', position=0, file=sys.stdout)
+        if self.varbose_progress:
+            self.prog_bar = tqdm(total=len(data), desc=f'Feature extraction started...', position=0, file=sys.stdout)
+        else:
+            print(f'Feature extraction started...')
 
         for seg_srl, seg_data in enumerate(data):
-            self.prog_bar.set_description(f'Extracting features for segment# {seg_srl+1} ||')
+            if self.varbose_progress:
+                self.prog_bar.set_description(f'Extracting features for segment# {seg_srl+1} ||')
+            else:
+                print(f'Extracting features for segment# {seg_srl+1} ')
             feat_df = self.feat_extractor.generate_features(seg_srl+1, seg_data, feature_names)
             all_feat_df = pd.concat([all_feat_df, feat_df])
             all_feat_df = all_feat_df.reset_index(drop=True)
-            self.prog_bar.update(1.0)
+            if self.varbose_progress:
+                self.prog_bar.update(1.0)
 
-        self.prog_bar.set_description(f'Finished extracting features for all segments...')
-        self.prog_bar.close()
+        if self.varbose_progress:
+            self.prog_bar.set_description(f'Finished extracting features for all segments...')
+            self.prog_bar.close()
+        else:
+            print(f'Finished extracting features for all segments...')
 
         return all_feat_df
 
@@ -220,7 +257,7 @@ class DIHC_FeatureManager:
         seg_len, seg_mov, num_segs = self.get_segment_metadata()
         # sampPS = len(data) if segment_length is None else seg_len
 
-        self.entProf_extractor = DIHC_EntropyProfile()
+        self.entProf_extractor = DIHC_EntropyProfile(varbose_progress=self.varbose_progress)
         all_entProf_df = pd.DataFrame()
 
         if segment_length is None:
@@ -231,17 +268,23 @@ class DIHC_FeatureManager:
                 print(f'Data can\'t be segmented...')
                 all_entProf_df = self.entProf_extractor.generate_sampEn_profile(data)
             else:
-                print(f'Entropy profile calculation started...')
                 # seg_len = int(segment_length*signal_frequency)
                 # seg_mov = int(seg_len-(segment_overlap*signal_frequency))
                 # num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
-                self.prog_bar = tqdm(total=num_segs, desc=f'Entropy profile calculation started...', position=0, file=sys.stdout)
-                self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap, signal_frequency=signal_frequency)
+                if self.varbose_progress:
+                    self.prog_bar = tqdm(total=num_segs, desc=f'Entropy profile calculation started...', position=0, file=sys.stdout)
+                else:
+                    print(f'Entropy profile calculation started...')
+                self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap,
+                                                         signal_frequency=signal_frequency, varbose_progress=self.varbose_progress)
                 seg_generator = self.data_segmenter.generate_segments()
                 seg_num = 0
                 while True:
                     try:
-                        self.prog_bar.set_description(f'Generating SampEn entropy profile for segment# {seg_num + 1} ||')
+                        if self.varbose_progress:
+                            self.prog_bar.set_description(f'Generating SampEn entropy profile for segment# {seg_num + 1} ||')
+                        else:
+                            print(f'Generating SampEn entropy profile for segment# {seg_num + 1} ')
                         seg_data = next(seg_generator)
                         # print('SEG data', seg_data)
                         entProf_df = self.entProf_extractor.generate_sampEn_profile(seg_data)
@@ -252,15 +295,21 @@ class DIHC_FeatureManager:
                         all_entProf_df = pd.concat([all_entProf_df, entProf_df])
                         all_entProf_df = all_entProf_df.reset_index(drop=True)
                         # print(type(entProf_df), entProf_df)
-                        self.prog_bar.update(1.0)
+                        if self.varbose_progress:
+                            self.prog_bar.update(1.0)
                     except StopIteration:
-                        # print('Finished generating Sample entropy profile for all segments...')
-                        # self.prog_bar.set_description(f'Finished generating Sample entropy profile for all segments...')
+                        # if self.varbose_progress:
+                        #     self.prog_bar.set_description(f'Finished generating Sample entropy profile for all segments...')
+                        # else:
+                        #     print(f'Finished generating Sample entropy profile for all segments...')
                         break
                     seg_num += 1
-                # print('Finished generating Sample entropy profile for all segments...')
-                self.prog_bar.set_description(f'Finished generating entropy profile for all segments...')
-                self.prog_bar.close()
+
+                if self.varbose_progress:
+                    self.prog_bar.set_description(f'Finished generating entropy profile for all segments...')
+                    self.prog_bar.close()
+                else:
+                    print(f'Finished generating entropy profile for all segments...')
         return all_entProf_df
 
 

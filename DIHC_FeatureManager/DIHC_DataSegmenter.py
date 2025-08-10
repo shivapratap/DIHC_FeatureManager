@@ -26,22 +26,22 @@ from DIHC_FeatureManager.DIHC_FeatureExtractor import *
 class DIHC_DataSegmenter:
 
     # ## Initialization
-    def __init__(self, data, segment_length=None, segment_overlap=0, signal_frequency=256, prog_bar=None):
+    def __init__(self, data, segment_length=None, segment_overlap=0, signal_frequency=256, prog_bar=None, varbose_progress=False):
         self.data = data
         self.segment_length = segment_length
         self.segment_overlap = segment_overlap
         self.signal_frequency = signal_frequency
+
         # self.prog_bar = prog_bar
+        self.varbose_progress = varbose_progress
         self.seg_len, self.seg_mov, self.num_segs = self.get_segment_metadata()
         # print(f'---->> {seg_srl}, {seg_st}, {seg_len}, {seg_mov}')
-        # print(f'Segmentation started...')
-        # if self.prog_bar is None:
-        #     self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...')
-        # else:
-        #     self.prog_bar.set_description(f'Segmentation started...')
 
-        self.prog_bar = tqdm(total=self.num_segs, desc=f'Segmentation started...', position=0, file=sys.stdout)
-        # self.prog_bar = tqdm(range(num_segs), desc=f'Segmentation started...')
+        # if self.varbose_progress:
+        #     self.prog_bar = tqdm(total=self.num_segs, desc=f'Segmentation started...', position=0, file=sys.stdout)
+        #     # self.prog_bar = tqdm(range(num_segs), desc=f'Segmentation started...')
+        # else:
+        #     print(f'Segmentation started...')
         return
 
     def get_segment_metadata(self):
@@ -72,29 +72,36 @@ class DIHC_DataSegmenter:
                 seg_mov = self.seg_mov
                 num_segs = self.num_segs
                 # print(f'---->> {seg_srl}, {seg_st}, {seg_len}, {seg_mov}')
-                # print(f'Segmentation started...')
-                # if self.prog_bar is None:
-                #     self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...')
-                # else:
-                #     self.prog_bar.set_description(f'Segmentation started...')
+
+                if self.varbose_progress:
+                    self.prog_bar = tqdm(total=self.num_segs, desc=f'Segmentation started...', position=0, file=sys.stdout)
+                    # self.prog_bar = tqdm(range(num_segs), desc=f'Segmentation started...')
+                else:
+                    print(f'Segmentation started...')
 
                 # self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...')
                 while (seg_st<len(self.data)):
-                    # print(f'Generating segment# {seg_srl}')
-                    self.prog_bar.set_description(f'Generating segment# {seg_srl} ||')
+                    if self.varbose_progress:
+                        self.prog_bar.set_description(f'Generating segment# {seg_srl} ||')
+                    else:
+                        print(f'Generating segment# {seg_srl} ')
                     seg_end = seg_st+seg_len
                     if seg_end>len(self.data):
                         seg_end = len(self.data) 
                         # break 
                     # print(f'====> {type(seg_st)} = {type(seg_end)}')
                     seg_data = self.data[int(seg_st):int(seg_end)]
-                    yield seg_data
                     seg_st += seg_mov
                     seg_srl += 1
-                    self.prog_bar.update(1.0)
-                # print(f'Segmentation finished...')
-                self.prog_bar.set_description(f'Segmentation finished...')
-                self.prog_bar.close()
+                    if self.varbose_progress:
+                        self.prog_bar.update(1.0)
+                    yield seg_data
+
+                if self.varbose_progress:
+                    self.prog_bar.set_description(f'Segmentation finished...')
+                    self.prog_bar.close()
+                else:
+                    print(f'Segmentation finished...')
         return
 
 
