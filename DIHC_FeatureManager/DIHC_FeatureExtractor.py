@@ -10,6 +10,7 @@ Date: 5/01/2020 8:55 pm
 
 ### In-built modules
 
+import sys
 import numpy as np
 import pandas as pd
 
@@ -38,8 +39,11 @@ from numba import jit, njit
 # from utils import _linear_regression, _log_n
 
 try:
-    from tqdm.notebook import tqdm
-except:
+    if "ipykernel" in sys.modules:
+        from tqdm.notebook import tqdm
+    else:
+        from tqdm import tqdm
+except ImportError:
     from tqdm import tqdm
 
 ### SRART: My modules ###
@@ -89,7 +93,7 @@ class DIHC_FeatureExtractor:
             self.highcut = highcut
 
         self.fd_data_dict = None
-        self.entropy_profile = None 
+        self.entropy_profile = None
 
         return
 
@@ -108,10 +112,12 @@ class DIHC_FeatureExtractor:
 
     ### Getting all the features
     #############################################################
-    def generate_features(self, seg_data, feature_names):
+    def generate_features(self, seg_srl, seg_data, feature_names):
         self.fd_data_dict = None
         self.entropy_profile = None 
         feature_values = []
+
+        # self.prog_bar = prog_bar
 
         seg_values = seg_data.copy()
         # seg_values = data_frame_segment[self.channel_name].values.flatten() #np.array(data_frame_segment) # data_frame_segment.values.flatten()
@@ -140,9 +146,11 @@ class DIHC_FeatureExtractor:
 
         # Generate corresponding features
         prog_bar = tqdm(feature_names, desc="Feature extraction started...")
+        # self.prog_bar.set_description("Feature extraction started...")
+        # self.prog_bar
         for feat in prog_bar:
             # print(f"---> {feat}")
-            prog_bar.set_description(f"Extracting feature: {feat}")
+            prog_bar.set_description(f"For segment: {seg_srl}, extracting feature: {feat} ||")
             method = None
             final_feat = None
             try:

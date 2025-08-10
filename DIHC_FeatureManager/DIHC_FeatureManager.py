@@ -5,12 +5,16 @@ Involvement: HumachLab & Deakin- Innovation in Healthcare (DIHC)
 Email: wwm.emran@gmail.com, emran.ali@research.deakin.edu.au 
 Date: 3/09/2021 7:38 pm
 """
+import  sys
 import numpy as np
 import pandas as pd
 
 try:
-    from tqdm.notebook import tqdm
-except:
+    if "ipykernel" in sys.modules:
+        from tqdm.notebook import tqdm
+    else:
+        from tqdm import tqdm
+except ImportError:
     from tqdm import tqdm
 
 ### SRART: My modules ###
@@ -43,26 +47,29 @@ class DIHC_FeatureManager:
         seg_len = int(segment_length * signal_frequency)
         seg_mov = int(seg_len - (segment_overlap * signal_frequency))
         num_segs = max(0, int((len(data) - seg_len) / seg_mov + 1))
-        self.prog_bar = tqdm(total=num_segs, desc=f'Data segmentation started...')
+        self.prog_bar = tqdm(total=num_segs, desc=f'Data segmentation started...', position=0, file=sys.stdout)
         self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap,
-                                                 signal_frequency=signal_frequency, prog_bar=self.prog_bar)
+                                                 signal_frequency=signal_frequency)
         seg_generator = self.data_segmenter.generate_segments()
-        i = 0
+        seg_srl = 0
         all_seg_data = np.array([])
         while True:
             try:
+                self.prog_bar.set_description(f'Generating segments #{seg_srl+1} ||')
                 seg_data = next(seg_generator)
-                if i==0:
+                if seg_srl==0:
                     all_seg_data = np.array(seg_data)
                 else:
                     all_seg_data = np.vstack([all_seg_data, seg_data])
-                i += 1
+                seg_srl += 1
+                self.prog_bar.update(1.0)
             except StopIteration:
                 # print('Finished segmentation of data...')
-                self.prog_bar = tqdm(total=num_segs, desc=f'Finished segmentation of data...')
+                # self.prog_bar.set_description(f'Finished segmentation of data...')
                 break
         # print('Finished segmentation of data...')
-        self.prog_bar = tqdm(total=num_segs, desc=f'Finished segmentation of data...')
+        self.prog_bar.set_description(f'Finished segmentation of data...')
+        self.prog_bar.close()
         return all_seg_data
 
 
@@ -82,32 +89,37 @@ class DIHC_FeatureManager:
 
         if segment_length is None:
             print(f'Dealing with entire signal...')
-            all_feat_df= self.feat_extractor.generate_features(data, feature_names)
+            all_feat_df= self.feat_extractor.generate_features(1, data, feature_names)
         else:
             if (segment_length*signal_frequency) > len(data):
                 print(f'Data can\'t be segmented...')
-                all_feat_df = self.feat_extractor.generate_features(data, feature_names)
+                all_feat_df = self.feat_extractor.generate_features(1, data, feature_names)
             else:
                 print(f'Data started segmenting for features: {feature_names}')
                 seg_len = int(segment_length*signal_frequency)
                 seg_mov = int(seg_len-(segment_overlap*signal_frequency))
                 num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
-                self.prog_bar = tqdm(total=num_segs, desc=f'Feature extraction started...')
-                self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap, signal_frequency=signal_frequency, prog_bar=self.prog_bar)
+                self.prog_bar = tqdm(total=num_segs, desc=f'Feature extraction started...', position=0, file=sys.stdout)
+                self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap, signal_frequency=signal_frequency)
                 seg_generator = self.data_segmenter.generate_segments()
+                seg_srl = 0
                 while True:
                     try:
+                        self.prog_bar.set_description(f'Extracting features for segment# {seg_srl+1} ||')
                         seg_data = next(seg_generator)
                         # print('SEG data', seg_data)
-                        feat_df = self.feat_extractor.generate_features(seg_data, feature_names)
+                        feat_df = self.feat_extractor.generate_features(seg_srl+1, seg_data, feature_names)
                         all_feat_df = pd.concat([all_feat_df, feat_df])
                         all_feat_df = all_feat_df.reset_index(drop=True)
+                        self.prog_bar.update(1.0)
                     except StopIteration:
                         # print('Finished extracting features for all segments...')
-                        self.prog_bar = tqdm(total=num_segs, desc=f'Finished extracting features for all segments...')
+                        # self.prog_bar.set_description(f'Finished extracting features for all segments...')
                         break
+                    seg_srl+=1
                 # print('Finished extracting features for all segments...')
-                self.prog_bar = tqdm(total=num_segs, desc=f'Finished extracting features for all segments...')
+                self.prog_bar.set_description(f'Finished extracting features for all segments...')
+                self.prog_bar.close()
         return all_feat_df
 
 
@@ -144,10 +156,17 @@ class DIHC_FeatureManager:
                                                     sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut)
         all_feat_df = pd.DataFrame()
 
-        for seg_data in data:
-            feat_df = self.feat_extractor.generate_features(seg_data, feature_names)
+        self.prog_bar = tqdm(total=len(data), desc=f'Feature extraction started...', position=0, file=sys.stdout)
+
+        for seg_srl, seg_data in enumerate(data):
+            self.prog_bar.set_description(f'Extracting features for segment# {seg_srl+1} ||')
+            feat_df = self.feat_extractor.generate_features(seg_srl+1, seg_data, feature_names)
             all_feat_df = pd.concat([all_feat_df, feat_df])
             all_feat_df = all_feat_df.reset_index(drop=True)
+            self.prog_bar.update(1.0)
+
+        self.prog_bar.set_description(f'Finished extracting features for all segments...')
+        self.prog_bar.close()
 
         return all_feat_df
 
@@ -176,12 +195,13 @@ class DIHC_FeatureManager:
                 seg_len = int(segment_length*signal_frequency)
                 seg_mov = int(seg_len-(segment_overlap*signal_frequency))
                 num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
-                self.prog_bar = tqdm(total=num_segs, desc=f'Entropy profile calculation started...')
-                self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap, signal_frequency=signal_frequency, prog_bar=self.prog_bar)
+                self.prog_bar = tqdm(total=num_segs, desc=f'Entropy profile calculation started...', position=0, file=sys.stdout)
+                self.data_segmenter = DIHC_DataSegmenter(data, segment_length=segment_length, segment_overlap=segment_overlap, signal_frequency=signal_frequency)
                 seg_generator = self.data_segmenter.generate_segments()
-                seg_num = 1
+                seg_num = 0
                 while True:
                     try:
+                        self.prog_bar.set_description(f'Generating SampEn entropy profile for segment# {seg_num + 1} ||')
                         seg_data = next(seg_generator)
                         # print('SEG data', seg_data)
                         entProf_df = self.entProf_extractor.generate_sampEn_profile(seg_data)
@@ -192,13 +212,15 @@ class DIHC_FeatureManager:
                         all_entProf_df = pd.concat([all_entProf_df, entProf_df])
                         all_entProf_df = all_entProf_df.reset_index(drop=True)
                         # print(type(entProf_df), entProf_df)
+                        self.prog_bar.update(1.0)
                     except StopIteration:
                         # print('Finished generating Sample entropy profile for all segments...')
-                        self.prog_bar.set_description(f'Finished generating Sample entropy profile for all segments...')
+                        # self.prog_bar.set_description(f'Finished generating Sample entropy profile for all segments...')
                         break
                     seg_num += 1
                 # print('Finished generating Sample entropy profile for all segments...')
-                self.prog_bar.set_description(f'Finished generating Sample entropy profile for all segments...')
+                self.prog_bar.set_description(f'Finished generating entropy profile for all segments...')
+                self.prog_bar.close()
         return all_entProf_df
 
 

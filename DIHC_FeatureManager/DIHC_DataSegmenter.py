@@ -5,12 +5,16 @@ Involvement: HumachLab & Deakin- Innovation in Healthcare (DIHC)
 Email: wwm.emran@gmail.com, emran.ali@research.deakin.edu.au
 Date: 3/09/2021 7:38 pm
 """
-
+import  sys
+import time
 import pandas as pd
 
 try:
-    from tqdm.notebook import tqdm
-except:
+    if "ipykernel" in sys.modules:
+        from tqdm.notebook import tqdm
+    else:
+        from tqdm import tqdm
+except ImportError:
     from tqdm import tqdm
 
 ### SRART: My modules ###
@@ -27,7 +31,19 @@ class DIHC_DataSegmenter:
         self.segment_length = segment_length
         self.segment_overlap = segment_overlap
         self.signal_frequency = signal_frequency
-        self.prog_bar = prog_bar
+        # self.prog_bar = prog_bar
+        seg_len = int(self.segment_length*self.signal_frequency)
+        seg_mov = int(seg_len-(self.segment_overlap*self.signal_frequency))
+        num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
+        # print(f'---->> {seg_srl}, {seg_st}, {seg_len}, {seg_mov}')
+        # print(f'Segmentation started...')
+        # if self.prog_bar is None:
+        #     self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...')
+        # else:
+        #     self.prog_bar.set_description(f'Segmentation started...')
+
+        self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...', position=0, file=sys.stdout)
+        # self.prog_bar = tqdm(range(num_segs), desc=f'Segmentation started...')
         return
 
     # ## Data Segmentor
@@ -51,13 +67,15 @@ class DIHC_DataSegmenter:
                 num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
                 # print(f'---->> {seg_srl}, {seg_st}, {seg_len}, {seg_mov}')
                 # print(f'Segmentation started...')
-                if self.prog_bar is None:
-                    self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...')
-                else:
-                    self.prog_bar.set_description(f'Segmentation started...')
+                # if self.prog_bar is None:
+                #     self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...')
+                # else:
+                #     self.prog_bar.set_description(f'Segmentation started...')
+
+                # self.prog_bar = tqdm(total=num_segs, desc=f'Segmentation started...')
                 while (seg_st<len(self.data)):
                     # print(f'Generating segment# {seg_srl}')
-                    self.prog_bar.set_description(f'Generating segment# {seg_srl}')
+                    self.prog_bar.set_description(f'Generating segment# {seg_srl} ||')
                     seg_end = seg_st+seg_len
                     if seg_end>len(self.data):
                         seg_end = len(self.data) 
@@ -67,8 +85,10 @@ class DIHC_DataSegmenter:
                     yield seg_data
                     seg_st += seg_mov
                     seg_srl += 1
+                    self.prog_bar.update(1.0)
                 # print(f'Segmentation finished...')
                 self.prog_bar.set_description(f'Segmentation finished...')
+                self.prog_bar.close()
         return
 
 
