@@ -231,3 +231,23 @@ class DIHC_FeatureGroup(Enum):
                 object.__setattr__(new_member, '_value_', filtered_features)  # Safe way to modify _value_
                 result.append(new_member)
         return result
+
+
+    # ## Select some specific features manually
+    @classmethod
+    def selec_some_specific_features(cls, sel_feature_list):
+        feature_list = [cls.all]  # Use cls instead of self
+        result = []
+
+        # print(f"====>feature_list: {feature_list}\n---->comp_exp_list: {comp_exp_list}")
+
+        for feature_group in feature_list:
+            current_features = feature_group.value
+            filtered_features = [feat for feat in current_features if feat in sel_feature_list]
+            if filtered_features:
+                new_member = cls[feature_group.name]
+                object.__setattr__(new_member, '_value_', filtered_features)  # Safe way to modify _value_
+                result.append(new_member)
+        return result
+
+
