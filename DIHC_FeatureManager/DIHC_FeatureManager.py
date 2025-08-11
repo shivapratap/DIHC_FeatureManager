@@ -147,9 +147,9 @@ class DIHC_FeatureManager:
                 while True:
                     try:
                         if self.varbose_progress:
-                            self.prog_bar.set_description(f'Extracting features for segment# {seg_srl+1} ')
+                            self.prog_bar.set_description(f'Extracting features for segment# {seg_srl+1} ||')
                         else:
-                            print(f'Extracting features for segment# {seg_srl+1} ||')
+                            print(f'Extracting features for segment# {seg_srl+1}')
                         seg_data = next(seg_generator)
                         # print('SEG data', seg_data)
                         feat_df = self.feat_extractor.generate_features(seg_srl+1, seg_data, feature_names)
