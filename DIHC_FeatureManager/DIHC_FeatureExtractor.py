@@ -405,48 +405,88 @@ class DIHC_FeatureExtractor:
     # ### Collected from Antropy and pyeeg package
 
     def approximateEntropy(self, data):
-        ae = app_entropy(data)
+        ae = 0
+        try:
+            ae = app_entropy(data)
+        except ZeroDivisionError:
+            ae = 0
         return ae
 
     def sampleEntropy(self, data):
-        se = sample_entropy(data)
+        se = 0
+        try:
+            se = sample_entropy(data)
+        except ZeroDivisionError:
+            se = 0
         return se
 
     def permutationEntropy(self, data):
-        pe = perm_entropy(data)
+        pe = 0
+        try:
+            pe = perm_entropy(data)
+        except ZeroDivisionError:
+            pe = 0
         return pe
 
     def spectralEntropy(self, data):
         sf = self.signal_frequency
-        # se = spectral_entropy(data, sf)
-        se = spectral_entropy(data, sf, method='welch')
+        se = 0
+        try:
+            # se = spectral_entropy(data, sf)
+            se = spectral_entropy(data, sf, method='welch')
+        except ZeroDivisionError:
+            se = 0
         return se
 
     def singularValueDecompositionEntropy(self, data):
-        svd_e = svd_entropy(data)
+        svd_e = 0
+        try:
+            svd_e = svd_entropy(data)
+        except ZeroDivisionError:
+            svd_e = 0
         return svd_e
 
     ############ Fracta dimension
     # Collected from Antropy and pyeeg packages
 
     def hjorthMobility(self, data):
-        hjm, _ = hjorth_params(data)
+        hjm = 0
+        try:
+            hjm, _ = hjorth_params(data)
+        except ZeroDivisionError:
+            hjm = 0
         return hjm
 
     def hjorthComplexity(self, data):
-        _, hjc = hjorth_params(data)
+        hjc = 0
+        try:
+            _, hjc = hjorth_params(data)
+        except ZeroDivisionError:
+            hjc = 0
         return hjc
 
     def hurstExponent(self, data):
-        hre = pyeeg.hurst(data)
+        hre = 0
+        try:
+            hre = pyeeg.hurst(data)
+        except ZeroDivisionError:
+            hre = 0
         return hre
 
     def fisherInfo(self, data, tau=1, m=2):
-        fsi = pyeeg.fisher_info(data, tau, m)
+        fsi = 0
+        try:
+            fsi = pyeeg.fisher_info(data, tau, m)
+        except ZeroDivisionError:
+            fsi = 0
         return fsi
 
     def lempelZivComplexity(self, data):
-        lzc = lziv_complexity(data)
+        lzc = 0
+        try:
+            lzc = lziv_complexity(data)
+        except ZeroDivisionError:
+            lzc = 0
         return lzc
 
     def petrosianFd(self, data):
