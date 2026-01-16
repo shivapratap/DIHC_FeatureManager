@@ -3,28 +3,35 @@
   <component name="CsvFileAttributes">
     <option name="attributeMap">
       <map>
-        <entry key="\all_features_matlab.csv">
+        <entry key="\eeg_all_features_matlab.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
             </Attribute>
           </value>
         </entry>
-        <entry key="\all_features_python.csv">
+        <entry key="\eeg_all_features_python.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
             </Attribute>
           </value>
         </entry>
-        <entry key="\all_features_python_1.csv">
+        <entry key="\eeg_all_features_python_1.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
             </Attribute>
           </value>
         </entry>
-        <entry key="\all_features_python_2.csv">
+        <entry key="\eeg_all_features_python_2.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\hyp_all_features_python.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />
