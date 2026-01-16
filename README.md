@@ -12,10 +12,12 @@ Involvement: Deakin University- Innovation in Healthcare (DIHC) (GitHub: https:/
 
 ## Description
 This library was initially developed for personal and team research applications targeting the processing and analysis of EEG signal data.
+This version of the library uses Python language to implement the feature management functionalities. 
+<br><strong>Note:</strong> The old version of this library implemented with Pyhton and Matlab can be found: https://github.com/WWM-EMRAN/DIHC_FeatureManager_Matlab . 
 
 
-#### Target tasks
-Feature engineering and other feature management-related tasks. 
+#### Target functionalities
+Feature engineering and other feature management-related functionalities. 
 
 This library provides a variety of functionalities starting from feature extraction, 
 feature selection and other feature management and engineering-related tasks.
@@ -195,14 +197,6 @@ It returns a pandas DataFrame containing the feature names (column-wise) and the
 - highcut: int (in Hz, default=48, related to=filtering_enabled)
 
     The high-cut frequency for filtering
-    
-- <strike>has_matlab_engine: bool -(True/False, default=True, related to=filtering_enabled)</strike>
-
-    <strike>Has the Matlab engine for Python been set up, False if doesn't have Matlab installed and configured. As a result, Fuzzy, Distribution and Entropy Profile related features will be excluded</strike> 
-
-[comment]: <> (- manage_exceptional_data: int -&#40;0-3, default=0&#41;)
-  
-[comment]: <> (    If wanted to deal with empty or null data)
 
 
 ###### Return
@@ -229,9 +223,6 @@ It returns a pandas DataFrame containing the feature names (column-wise) and the
     ##### Call function to get all features 
     feat_df = feat_manager.extract_features_from_data(samp_data, segment_length=5, signal_frequency=sig_freq)
     
-    <!-- ##### Call function to get all features with Matlab related features excluded
-    feat_df = feat_manager.extract_features_from_data(samp_data, segment_length=5, signal_frequency=sig_freq, has_matlab_engine=False)  -->
-        
     ##### Call function to get time-domain non-linear entropy features 
     feat_df = feat_manager.extract_features_from_data(samp_data, feature_names=[DIHC_FeatureGroup.tdNlEn], segment_length=5, signal_frequency=sig_freq)
         
@@ -283,14 +274,7 @@ It returns a pandas DataFrame containing the feature names (column-wise) and the
 - highcut: int (in Hz, default=48, related to=filtering_enabled)
 
     The high-cut frequency for filtering
-    
-- <strike>has_matlab_engine: bool -(True/False, default=True, related to=filtering_enabled)</strike>
 
-    <strike>Has the Matlab engine for Python been set up, False if doesn't have Matlab installed and configured. As a result, Fuzzy, Distribution and Entropy Profile related features will be excluded </strike>
-
-[comment]: <> (- manage_exceptional_data: int -&#40;0-3, default=0&#41;)
-  
-[comment]: <> (    If wanted to deal with empty or null data)
 
 
 ###### Return
@@ -317,9 +301,6 @@ It returns a pandas DataFrame containing the feature names (column-wise) and the
     ##### Call function to get all features 
     feat_df = feat_manager.extract_features_from_segments(samp_data, segment_length=5, signal_frequency=sig_freq)
     
-    <!-- ##### Call function to get all features with Matlab-related features excluded
-    feat_df = feat_manager.extract_features_from_segments(samp_data, segment_length=5, signal_frequency=sig_freq, has_matlab_engine=False) -->
-        
     ##### Call function to get time-domain non-linear entropy features 
     feat_df = feat_manager.extract_features_from_segments(samp_data, feature_names=[DIHC_FeatureGroup.tdNlEn], segment_length=5, signal_frequency=sig_freq)
         
@@ -397,13 +378,6 @@ It returns a pandas DataFrame containing the segment serial number (column-wise)
 
     Sampling frequency of the signal
     
-- <strike>has_matlab_engine: bool -(True/False, default=True, related to=filtering_enabled)</strike>
-
-    <strike>Has the Matlab engine for Python been set up, False if doesn't have Matlab installed and configured. As a result, the Entropy Profile cannot be extracted. Although it is optional right now, it needs to be true to get the Entropy Profile </strike> 
-
-[comment]: <> (- manage_exceptional_data: int -&#40;0-3, default=0&#41;)
-  
-[comment]: <> (    If wanted to deal with empty or null data)
 
 
 ###### Return
@@ -431,7 +405,6 @@ It returns a pandas DataFrame containing the segment serial number (column-wise)
     entProf_df = feat_manager.extract_sampEn_profile_from_data(samp_data, segment_length=5, segment_overlap=2, signal_frequency=sig_freq)
     
     ##### Call function to get Sample entropy profile data for a 5-second segment with no overlap 
-    <!-- # entProf_df = feat_manager.extract_sampEn_profile_from_data(samp_data, segment_length=5, signal_frequency=sig_freq, has_matlab_engine=True) -->
     # entProf_df = feat_manager.extract_sampEn_profile_from_data(samp_data, segment_length=5, signal_frequency=sig_freq)
     
     ##### feat_df will have the Sample entropy profile data in a DataFrame 
@@ -467,6 +440,8 @@ Please let us know if any bug has been spotted and don't forget to acknowledge i
 Version: 0.12.0
 
 Stage: Beta
+
+<br> The old version of this library implemented with Pyhton and Matlab can be found: https://github.com/WWM-EMRAN/DIHC_FeatureManager_Matlab .
 
 
 ## Citation  
