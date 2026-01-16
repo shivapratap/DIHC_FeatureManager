@@ -39,9 +39,20 @@ class DIHC_FeatureManager:
 
     def get_segment_metadata(self):
         hyp_seg_multiplier = 1
-        seg_len = int(self.segment_length*hyp_seg_multiplier) if self.signal_frequency==None else int(self.segment_length*self.signal_frequency)
-        seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
+
+        seg_len = int(len(self.data)*hyp_seg_multiplier)
+        seg_mov = int(len(self.data)*hyp_seg_multiplier)
+        num_segs = 1
+
+        if ((self.signal_frequency is not None) and (self.segment_length is not None)):
+            seg_len = int(len(self.data)*hyp_seg_multiplier) if ((self.signal_frequency is None) or (self.segment_length is None)) else int(self.segment_length*self.signal_frequency)
+        if ((self.signal_frequency is not None) and (self.segment_overlap is not None)):
+            seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
         num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
+
+        # seg_len = int(len(self.data)*hyp_seg_multiplier) if ((self.signal_frequency is None) or (self.segment_length is None)) else int(self.segment_length*self.signal_frequency)
+        # seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
+        # num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
         return seg_len, seg_mov, num_segs
 
     # ## Segment generater
