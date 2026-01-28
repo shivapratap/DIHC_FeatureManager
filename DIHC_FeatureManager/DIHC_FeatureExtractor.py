@@ -413,6 +413,8 @@ class DIHC_FeatureExtractor:
         return ae
 
     def sampleEntropy(self, data):
+        if len(data) < 5000:
+            return 0.0
         se = 0
         try:
             se = sample_entropy(data)

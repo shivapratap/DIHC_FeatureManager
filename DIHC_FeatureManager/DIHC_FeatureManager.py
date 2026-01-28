@@ -48,7 +48,10 @@ class DIHC_FeatureManager:
             seg_len = int(len(self.data)*hyp_seg_multiplier) if ((self.signal_frequency is None) or (self.segment_length is None)) else int(self.segment_length*self.signal_frequency)
         if ((self.signal_frequency is not None) and (self.segment_overlap is not None)):
             seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
-        num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
+        # num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
+
+        if seg_len > 0 and seg_mov > 0:
+            num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
 
         # seg_len = int(len(self.data)*hyp_seg_multiplier) if ((self.signal_frequency is None) or (self.segment_length is None)) else int(self.segment_length*self.signal_frequency)
         # seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
