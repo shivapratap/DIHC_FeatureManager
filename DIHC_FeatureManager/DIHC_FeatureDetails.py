@@ -130,7 +130,8 @@ class DIHC_FeatureDetails:
     comp_exp_list2 = ['approximateEntropy']
     comp_exp_list3 = ['sampleEntropy', 'fuzzyEntropy']
     comp_exp_list4 = fd_spectral_power+fd_spectral_band_power
-    comp_exp_list5 = ['distributionEntropy']+td_nonlinear_samp_entropy_profiling
+    comp_exp_list5 = ['distributionEntropy']
+    comp_exp_list6 = td_nonlinear_samp_entropy_profiling
 
 
     # ## Initialization
@@ -205,6 +206,7 @@ class DIHC_FeatureGroup(Enum):
     compExp3 = DIHC_FeatureDetails.comp_exp_list3
     compExp4 = DIHC_FeatureDetails.comp_exp_list4
     compExp5 = DIHC_FeatureDetails.comp_exp_list5
+    compExp6 = DIHC_FeatureDetails.comp_exp_list6
 
     # ## Remove computationally expensive features
     @classmethod
@@ -214,7 +216,7 @@ class DIHC_FeatureGroup(Enum):
         result = []
         computationally_expensive_list = [DIHC_FeatureDetails.comp_exp_list1, DIHC_FeatureDetails.comp_exp_list2,
                                          DIHC_FeatureDetails.comp_exp_list3, DIHC_FeatureDetails.comp_exp_list4,
-                                         DIHC_FeatureDetails.comp_exp_list5]
+                                         DIHC_FeatureDetails.comp_exp_list5, DIHC_FeatureDetails.comp_exp_list6]
 
         comp_exp_list = []
         if comp_exp_list_index>=1 and comp_exp_list_index<=len(computationally_expensive_list):
