@@ -61,7 +61,11 @@ import pandas as pd
 import math
 import scipy as sp
 import scipy.signal as sig
-from scipy.integrate import simps
+try:
+    # SciPy >= 1.14 removed the deprecated `simps` alias entirely; use `simpson` instead.
+    from scipy.integrate import simpson as simps
+except ImportError:
+    from scipy.integrate import simps
 from scipy.stats import entropy as scipyEntropy
 from scipy.signal import butter, lfilter, welch
 from scipy.spatial.distance import pdist, squareform
