@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+DIHC_FeatureManager/DIHC_DataSegmenter.py
+DIHC_FeatureManager/DIHC_EntropyProfile.py
+DIHC_FeatureManager/DIHC_FeatureDetails.py
+DIHC_FeatureManager/DIHC_FeatureExtractor.py
+DIHC_FeatureManager/DIHC_FeatureExtrantor_Helper.py
+DIHC_FeatureManager/DIHC_FeatureExtrantor_Helper_1.py
+DIHC_FeatureManager/DIHC_FeatureManager.py
+DIHC_FeatureManager/__init__.py
+DIHC_FeatureManager.egg-info/PKG-INFO
+DIHC_FeatureManager.egg-info/SOURCES.txt
+DIHC_FeatureManager.egg-info/dependency_links.txt
+DIHC_FeatureManager.egg-info/requires.txt
+DIHC_FeatureManager.egg-info/top_level.txt
