@@ -1,9 +1,28 @@
 """
 File Name: DIHC_FeatureManager.py
-Author: WWM Emran (Emran Ali)
-Involvement: HumachLab & Deakin- Innovation in Healthcare (DIHC)
-Email: wwm.emran@gmail.com, emran.ali@research.deakin.edu.au 
-Date: 3/09/2021 7:38 pm
+Original Author: WWM Emran (Emran Ali)
+Original Involvement: HumachLab & Deakin- Innovation in Healthcare (DIHC)
+Original Email: wwm.emran@gmail.com, emran.ali@research.deakin.edu.au
+Original Date: 3/09/2021 7:38 pm
+
+--------------------------------------------------------------------------
+GENERALIZATION PATCH NOTES (paired with DIHC_FeatureExtractor.py patch - see
+that file's header for the full rationale):
+
+1. `signal_frequency` no longer defaults to 256 Hz (EEG-typical). It now
+   defaults to None and is validated explicitly - callers must state their
+   real sampling rate, so a forgotten argument fails loudly instead of
+   silently analyzing data at the wrong assumed rate.
+
+2. `lowcut`/`highcut` no longer default to EEG-typical values (1/48 Hz).
+   They default to None and are only required (and validated against
+   Nyquist) when filtering_enabled=True.
+
+3. New passthrough parameters: `band_frequency_list`, `min_sample_entropy_length`,
+   `round_decimals` - forwarded to DIHC_FeatureExtractor so callers can
+   configure these per signal domain instead of inheriting EEG-shaped
+   defaults. See DIHC_FeatureExtractor.py for what each controls.
+--------------------------------------------------------------------------
 """
 import  sys
 import numpy as np
@@ -34,7 +53,6 @@ class DIHC_FeatureManager:
         self.feat_selector = None
         self.prog_bar = None
         self.varbose_progress = varbose_progress
-        # self.prog_bar = tqdm(total=100, desc=f'Feature manager started...')
         return
 
     def get_segment_metadata(self):
@@ -48,35 +66,30 @@ class DIHC_FeatureManager:
             seg_len = int(len(self.data)*hyp_seg_multiplier) if ((self.signal_frequency is None) or (self.segment_length is None)) else int(self.segment_length*self.signal_frequency)
         if ((self.signal_frequency is not None) and (self.segment_overlap is not None)):
             seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
-        # num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
 
         if seg_len > 0 and seg_mov > 0:
             num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
 
-        # seg_len = int(len(self.data)*hyp_seg_multiplier) if ((self.signal_frequency is None) or (self.segment_length is None)) else int(self.segment_length*self.signal_frequency)
-        # seg_mov = int(seg_len-self.segment_overlap*hyp_seg_multiplier) if self.signal_frequency==None else int(seg_len-(self.segment_overlap*self.signal_frequency))
-        # num_segs = max(0, int((len(self.data)-seg_len)/seg_mov +1) )
         return seg_len, seg_mov, num_segs
 
     # ## Segment generater
-    def get_segments_for_data(self, data, segment_length=None, segment_overlap=0, signal_frequency=256):
+    def get_segments_for_data(self, data, segment_length=None, segment_overlap=0, signal_frequency=None):
         if len(data)==0:
             print(f'Data is empty...')
             exit(0)
-            # return
+
+        if signal_frequency is None:
+            raise ValueError(
+                "signal_frequency must be explicitly provided - no default sampling rate is assumed."
+            )
 
         self.data = data
         self.segment_length = segment_length
         self.segment_overlap = segment_overlap
         self.signal_frequency = signal_frequency
 
-        # print('Data segmentation started...')
         seg_len, seg_mov, num_segs = self.get_segment_metadata()
 
-        # print(f"==================> num_segs: {num_segs}")
-        # seg_len = int(segment_length * signal_frequency)
-        # seg_mov = int(seg_len - (segment_overlap * signal_frequency))
-        # num_segs = max(0, int((len(data) - seg_len) / seg_mov + 1))
         if self.varbose_progress:
             self.prog_bar = tqdm(total=num_segs, desc=f'Data segmentation started...', position=0, file=sys.stdout)
         else:
@@ -101,12 +114,7 @@ class DIHC_FeatureManager:
                 if self.varbose_progress:
                     self.prog_bar.update(1.0)
             except StopIteration:
-                # if self.varbose_progress:
-                #     self.prog_bar.set_description(f'Finished segmentation of data...')
-                # else:
-                #     print(f'Finished segmentation of data...')
                 break
-        # print('Finished segmentation of data...')
         if self.varbose_progress:
             self.prog_bar.set_description(f'Finished segmentation of data...')
             self.prog_bar.close()
@@ -116,12 +124,23 @@ class DIHC_FeatureManager:
 
 
     # ## Feature extractor - from data
-    def extract_features_from_data(self, data, feature_names=[], segment_length=None, segment_overlap=0, signal_frequency=256,
-                               filtering_enabled=False, lowcut=1, highcut=48, manage_exceptional_data=0):
+    def extract_features_from_data(self, data, feature_names=[], segment_length=None, segment_overlap=0,
+                               signal_frequency=None, filtering_enabled=False, lowcut=None, highcut=None,
+                               manage_exceptional_data=0, band_frequency_list=None,
+                               min_sample_entropy_length=None, round_decimals=None):
+        """
+        See DIHC_FeatureExtractor.__init__ for the meaning of band_frequency_list,
+        min_sample_entropy_length, and round_decimals. signal_frequency, lowcut,
+        and highcut are validated there (Nyquist check) rather than here.
+        """
         if len(data)==0:
             print(f'Data is empty...')
             exit(0)
-            # return
+
+        if signal_frequency is None:
+            raise ValueError(
+                "signal_frequency must be explicitly provided - no default sampling rate is assumed."
+            )
 
         self.data = data
         self.segment_length = segment_length
@@ -131,11 +150,11 @@ class DIHC_FeatureManager:
         seg_len, seg_mov, num_segs = self.get_segment_metadata()
         sampPS = len(data) if segment_length is None else seg_len
 
-        # print(f"==================> data: {data.shape} num_segs: {num_segs}, seg_mov: {seg_mov}, seg_len: {seg_len}, sampPS: {sampPS}")
-
-        self.feat_extractor = DIHC_FeatureExtractor(manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
-                                                    sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut,
-                                                    varbose_progress=self.varbose_progress)
+        self.feat_extractor = DIHC_FeatureExtractor(
+            manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
+            sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut, highcut=highcut,
+            varbose_progress=self.varbose_progress, band_frequency_list=band_frequency_list,
+            min_sample_entropy_length=min_sample_entropy_length, round_decimals=round_decimals)
         all_feat_df = pd.DataFrame()
 
         if segment_length is None:
@@ -147,9 +166,6 @@ class DIHC_FeatureManager:
                 all_feat_df = self.feat_extractor.generate_features(1, data, feature_names)
             else:
                 print(f'Data started segmenting for features: {feature_names}')
-                # seg_len = int(segment_length*signal_frequency)
-                # seg_mov = int(seg_len-(segment_overlap*signal_frequency))
-                # num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
                 if self.varbose_progress:
                     self.prog_bar = tqdm(total=num_segs, desc=f'Feature extraction started...', position=0, file=sys.stdout)
                 else:
@@ -165,17 +181,12 @@ class DIHC_FeatureManager:
                         else:
                             print(f'Extracting features for segment# {seg_srl+1}')
                         seg_data = next(seg_generator)
-                        # print('SEG data', seg_data)
                         feat_df = self.feat_extractor.generate_features(seg_srl+1, seg_data, feature_names)
                         all_feat_df = pd.concat([all_feat_df, feat_df])
                         all_feat_df = all_feat_df.reset_index(drop=True)
                         if self.varbose_progress:
                             self.prog_bar.update(1.0)
                     except StopIteration:
-                        # if self.varbose_progress:
-                        #     self.prog_bar.set_description(f'Finished extracting features for all segments...')
-                        # else:
-                        #     print(f'Finished extracting features for all segments...')
                         break
                     seg_srl+=1
                 if self.varbose_progress:
@@ -204,12 +215,17 @@ class DIHC_FeatureManager:
 
 
     # ## Feature extractor - from segments
-    def extract_features_from_segments(self, data, feature_names=[], signal_frequency=256,
-                               filtering_enabled=False, lowcut=1, highcut=48, manage_exceptional_data=0):
+    def extract_features_from_segments(self, data, feature_names=[], signal_frequency=None,
+                               filtering_enabled=False, lowcut=None, highcut=None, manage_exceptional_data=0,
+                               band_frequency_list=None, min_sample_entropy_length=None, round_decimals=None):
         if len(data)==0:
             print(f'Data is empty...')
             exit(0)
-            # return
+
+        if signal_frequency is None:
+            raise ValueError(
+                "signal_frequency must be explicitly provided - no default sampling rate is assumed."
+            )
 
         segment_length = data[0, :] if signal_frequency==None else data[0, :]/signal_frequency
         self.data = data
@@ -226,9 +242,11 @@ class DIHC_FeatureManager:
             print('The segment is not valid...')
             exit(0)
 
-        self.feat_extractor = DIHC_FeatureExtractor(manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
-                                                    sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut,
-                                                    highcut=highcut, varbose_progress=self.varbose_progress)
+        self.feat_extractor = DIHC_FeatureExtractor(
+            manage_exceptional_data=manage_exceptional_data, signal_frequency=signal_frequency,
+            sample_per_second=sampPS, filtering_enabled=filtering_enabled, lowcut=lowcut,
+            highcut=highcut, varbose_progress=self.varbose_progress, band_frequency_list=band_frequency_list,
+            min_sample_entropy_length=min_sample_entropy_length, round_decimals=round_decimals)
         all_feat_df = pd.DataFrame()
 
         if self.varbose_progress:
@@ -257,11 +275,15 @@ class DIHC_FeatureManager:
 
 
     # ## Entropy profile extractor - from data
-    def extract_sampEn_profile_from_data(self, data, segment_length=None, segment_overlap=0, signal_frequency=256):
+    def extract_sampEn_profile_from_data(self, data, segment_length=None, segment_overlap=0, signal_frequency=None):
         if len(data)==0:
             print(f'Data is empty...')
             exit(0)
-            # return
+
+        if signal_frequency is None:
+            raise ValueError(
+                "signal_frequency must be explicitly provided - no default sampling rate is assumed."
+            )
 
         self.data = data
         self.segment_length = segment_length
@@ -269,7 +291,6 @@ class DIHC_FeatureManager:
         self.signal_frequency = signal_frequency
 
         seg_len, seg_mov, num_segs = self.get_segment_metadata()
-        # sampPS = len(data) if segment_length is None else seg_len
 
         self.entProf_extractor = DIHC_EntropyProfile(varbose_progress=self.varbose_progress)
         all_entProf_df = pd.DataFrame()
@@ -282,9 +303,6 @@ class DIHC_FeatureManager:
                 print(f'Data can\'t be segmented...')
                 all_entProf_df = self.entProf_extractor.generate_sampEn_profile(data)
             else:
-                # seg_len = int(segment_length*signal_frequency)
-                # seg_mov = int(seg_len-(segment_overlap*signal_frequency))
-                # num_segs = max(0, int((len(data)-seg_len)/seg_mov +1) )
                 if self.varbose_progress:
                     self.prog_bar = tqdm(total=num_segs, desc=f'Entropy profile calculation started...', position=0, file=sys.stdout)
                 else:
@@ -300,22 +318,15 @@ class DIHC_FeatureManager:
                         else:
                             print(f'Generating SampEn entropy profile for segment# {seg_num + 1} ')
                         seg_data = next(seg_generator)
-                        # print('SEG data', seg_data)
                         entProf_df = self.entProf_extractor.generate_sampEn_profile(seg_data)
-                        # print('xxxxxx- ', entProf_df.shape[0], [seg_num]*entProf_df.shape[0])
                         seg_num_df = pd.DataFrame([seg_num]*entProf_df.shape[0], columns=['Segment_No'])
                         seg_num_df = seg_num_df.reset_index(drop=True)
                         entProf_df = pd.concat([seg_num_df, entProf_df], axis=1)
                         all_entProf_df = pd.concat([all_entProf_df, entProf_df])
                         all_entProf_df = all_entProf_df.reset_index(drop=True)
-                        # print(type(entProf_df), entProf_df)
                         if self.varbose_progress:
                             self.prog_bar.update(1.0)
                     except StopIteration:
-                        # if self.varbose_progress:
-                        #     self.prog_bar.set_description(f'Finished generating Sample entropy profile for all segments...')
-                        # else:
-                        #     print(f'Finished generating Sample entropy profile for all segments...')
                         break
                     seg_num += 1
 
@@ -325,7 +336,3 @@ class DIHC_FeatureManager:
                 else:
                     print(f'Finished generating entropy profile for all segments...')
         return all_entProf_df
-
-
-
-
