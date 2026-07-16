@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "DIHC_FeatureManager"
+version = "2.0.0"
+description = "Generic biosignal feature extraction toolkit (time-domain, entropy, complexity/fractal, and frequency-domain features), forked and generalized for use beyond EEG."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    { name = "WWM Emran (Emran Ali)", email = "wwm.emran@gmail.com" },
+]
+maintainers = [
+    { name = "Your Name", email = "your.email@example.com" },
+]
+license = { text = "MIT" }
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "antropy",
+    "pyeeg",
+    "mne",
+    "numba",
+    "tqdm",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["DIHC_FeatureManager*"]
