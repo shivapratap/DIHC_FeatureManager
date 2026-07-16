@@ -1,2 +1,85 @@
 .idea/
+# ==========================================
+# Spyder IDE Specific Files
+# ==========================================
+.spyproject/
+.spyderproject/
+.directory
+spyder.lock
+
+# ==========================================
+# Python Virtual Environments
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+# Anaconda environments are usually stored globally, 
+# but if you create one locally:
+.conda/
+
+# ==========================================
+# Python Bytecode and Cache
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==========================================
+# Distribution / Packaging
+# ==========================================
+bin/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Testing and Coverage
+# ==========================================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+.pdm-build/
+
+# ==========================================
+# Jupyter Notebooks and Data Science
+# ==========================================
+.ipynb_checkpoints
+.ipython/
+
+# ==========================================
+# Environment Variables and Secrets
+# ==========================================
+.env
+.yamlenv
+.localenv
+
+# ==========================================
+# OS Specific (Optional but highly recommended)
+# ==========================================
+.DS_Store
+Thumbs.db
 
