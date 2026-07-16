@@ -597,6 +597,33 @@ def compute_chebyshev_distances_enProf_(emb):
                 dist_matrix[i, j] = 0.0
     return dist_matrix
 
+@njit(parallel=True)
+def compute_chebyshev_distances_dist_optimized(embedded):
+    L = embedded.shape[0]
+    m = embedded.shape[1]
+    
+    # Pre-allocate total space for permutation distance matrices
+    total_pairs = L * (L - 1)
+    distances = np.empty(total_pairs, dtype=np.float64)
+    
+    for i in prange(L):
+        idx_start = i * (L - 1)
+        for j in range(L):
+            if i == j:
+                continue
+            # Structured insertion instead of dynamic array allocation
+            max_diff = 0.0
+            for k in range(m):
+                diff = abs(embedded[i, k] - embedded[j, k])
+                if diff > max_diff:
+                    max_diff = diff
+            
+            # Adjust mapping positions safely
+            dest_idx = idx_start + j if j < i else idx_start + j - 1
+            distances[dest_idx] = max_diff
+            
+    return distances
+
 @njit
 def cumulative_histogram_matrix_enProf_(dist_mat, range_vals):
     N = dist_mat.shape[0]

@@ -2,41 +2,38 @@
 """
 File Name: DIHC_FeatureExtractor.py
 Author: WWM Emran (Emran Ali)
-Involvement: HumachLab & Deakin- Innovation in Healthcare (DIHC)
-Email: wwm.emran@gmail.com, emran.ali@research.deakin.edu.au
-Date: 5/01/2020 8:55 pm
+Involvement: HumachLab & Deakin - Innovation in Healthcare (DIHC)
+
+
+Updated: Refactored for modern SciPy compatibility, safety, and performance.
+Updated by Shivapratap Gopakumar, Engineering for Health Group, Amrita Vishwa Vidyapeetham
 """
 
-
-### In-built modules
-
+from __future__ import annotations
+import collections
 import sys
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-
-import math
 import scipy as sp
 import scipy.signal as sig
-from scipy.integrate import simps
-from scipy.stats import entropy as scipyEntropy
 from scipy.signal import butter, lfilter, welch
-from scipy.spatial.distance import pdist, squareform
-from scipy import fft, fftpack
+from scipy.stats import entropy as scipyEntropy
 
-from antropy import *
+# Handle the deprecation/removal of simps in modern SciPy versions
+try:
+    from scipy.integrate import simpson
+except ImportError:
+    from scipy.integrate import simps as simpson  # type: ignore
+
+from antropy import (
+    app_entropy, detrended_fluctuation, higuchi_fd, hjorth_params, 
+    katz_fd, lziv_complexity, num_zerocross, perm_entropy, 
+    petrosian_fd, sample_entropy, spectral_entropy, svd_entropy
+)
 import pyeeg
 from mne.time_frequency import psd_array_multitaper
-
-import collections
-
-from numba import jit, njit
-
-# from math import log, floor
-# from scipy.fft import fft
-# from math import factorial, log
-# from sklearn.neighbors import KDTree
-# from scipy.signal import periodogram, welch, butter, lfilter
-# from utils import _linear_regression, _log_n
 
 try:
     if "ipykernel" in sys.modules:
@@ -44,168 +41,128 @@ try:
     else:
         from tqdm import tqdm
 except ImportError:
-    from tqdm import tqdm
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
-### SRART: My modules ###
-from DIHC_FeatureManager import *
-from DIHC_FeatureManager.DIHC_EntropyProfile import *
-from DIHC_FeatureManager.DIHC_FeatureDetails import *
-from DIHC_FeatureManager.DIHC_FeatureExtrantor_Helper import *
-from DIHC_FeatureManager.DIHC_FeatureDetails import DIHC_FeatureGroup
-### END: My modules ###
+# Internal module imports (using relative paths to avoid circular/namespace clutter)
+from .DIHC_EntropyProfile import DIHC_EntropyProfile
+from .DIHC_FeatureDetails import DIHC_FeatureDetails, DIHC_FeatureGroup
+from .DIHC_FeatureExtrantor_Helper import (
+    compute_distribution_entropy_jit,
+    compute_entropy_profile_jit,
+    compute_fuzzy_entropy_jit
+)
 
 
-
-
-###
 class DIHC_FeatureExtractor:
 
-    def __init__(self, manage_exceptional_data=0, signal_frequency = 256, sample_per_second=1280, filtering_enabled=False, lowcut=1, highcut=48, varbose_progress=False):
+    def __init__(
+        self, 
+        manage_exceptional_data: int = 0, 
+        signal_frequency: float = 256.0, 
+        sample_per_second: int = 1280, 
+        filtering_enabled: bool = False, 
+        lowcut: float = 1.0, 
+        highcut: float = 48.0, 
+        verbose_progress: bool = False,
+        **kwargs: Any  # Capture potential legacy backward-compatible fields
+    ):
         self.manage_exceptional_data = manage_exceptional_data
-
-        self.td_linear_statistical = DIHC_FeatureDetails.td_linear_statistical
-        self.td_nonlinear_entropy = DIHC_FeatureDetails.td_nonlinear_entropy
-        self.td_nonlinear_complexity_and_fractal_dimensions = DIHC_FeatureDetails.td_nonlinear_complexity_and_fractal_dimensions
-        # 'hurstExponent',
-        self.td_nonlinear_samp_entropy_profiling = DIHC_FeatureDetails.td_nonlinear_samp_entropy_profiling
-        # other means gamma frequency
-        self.fd_linear_statistical = DIHC_FeatureDetails.fd_linear_statistical
-        self.fd_linear_statistical_binwise = DIHC_FeatureDetails.fd_linear_statistical_binwise
-        self.fd_spectral_band_power = DIHC_FeatureDetails.fd_spectral_band_power
-
-        self.band_frequency_list = DIHC_FeatureDetails.band_frequency_list
-
-        self.band = (0, signal_frequency)
-
-        # #All features
-        self.feature_list = [DIHC_FeatureDetails.td_linear_statistical, DIHC_FeatureDetails.td_nonlinear_entropy,
-                             DIHC_FeatureDetails.td_nonlinear_complexity_and_fractal_dimensions,
-                             DIHC_FeatureDetails.td_nonlinear_samp_entropy_profiling, DIHC_FeatureDetails.fd_linear_statistical,
-                             DIHC_FeatureDetails.fd_linear_statistical_binwise, DIHC_FeatureDetails.fd_spectral_band_power]
-
         self.signal_frequency = signal_frequency
         self.sample_per_second = sample_per_second
         self.filtering_enabled = filtering_enabled
         self.lowcut = lowcut
         self.highcut = highcut
-        if self.filtering_enabled:
-            self.lowcut = lowcut
-            self.highcut = highcut
+        
+        # Backward compatibility layer for misspelled parameter
+        self.verbose_progress = kwargs.get("varbose_progress", verbose_progress)
 
-        self.fd_data_dict = None
-        self.entropy_profile = None
-        self.varbose_progress = varbose_progress
+        # Feature groupings from central specifications
+        self.td_linear_statistical = DIHC_FeatureDetails.td_linear_statistical
+        self.td_nonlinear_entropy = DIHC_FeatureDetails.td_nonlinear_entropy
+        self.td_nonlinear_complexity_and_fractal_dimensions = DIHC_FeatureDetails.td_nonlinear_complexity_and_fractal_dimensions
+        self.td_nonlinear_samp_entropy_profiling = DIHC_FeatureDetails.td_nonlinear_samp_entropy_profiling
+        self.fd_linear_statistical = DIHC_FeatureDetails.fd_linear_statistical
+        self.fd_linear_statistical_binwise = DIHC_FeatureDetails.fd_linear_statistical_binwise
+        self.fd_spectral_band_power = DIHC_FeatureDetails.fd_spectral_band_power
+        self.band_frequency_list = DIHC_FeatureDetails.band_frequency_list
 
-        return
+        self.band: Tuple[float, float] = (0.0, self.signal_frequency)
+        self.feature_list = [
+            self.td_linear_statistical, self.td_nonlinear_entropy,
+            self.td_nonlinear_complexity_and_fractal_dimensions,
+            self.td_nonlinear_samp_entropy_profiling, self.fd_linear_statistical,
+            self.fd_linear_statistical_binwise, self.fd_spectral_band_power
+        ]
 
+        self.fd_data_dict: Optional[Dict[float, complex]] = None
+        self.entropy_profile: Optional[np.ndarray] = None
 
-    def get_new_features_to_calculate(self, feature_types):
-        feature_names = None
+    def get_new_features_to_calculate(self, feature_types: List[int]) -> List[str]:
+        if len(feature_types) == 0:
+            return [item for sublist in self.feature_list for item in sublist]
+        return [item for i, sublist in enumerate(self.feature_list) for item in sublist if i in feature_types]
 
-        # Select features based on type
-        if len(feature_types)==0:
-            feature_names = [item for sublist in self.feature_list for item in sublist]
-        else:
-            feature_names = [item for i, sublist in enumerate(self.feature_list) for item in sublist if i in feature_types]
-
-        return feature_names
-
-
-    ### Getting all the features
-    #############################################################
-    def generate_features(self, seg_srl, seg_data, feature_names):
+    def generate_features(self, seg_srl: int, seg_data: np.ndarray, feature_names: Optional[List[Any]]) -> pd.DataFrame:
         self.fd_data_dict = None
         self.entropy_profile = None 
         feature_values = []
+        seg_values = np.asarray(seg_data).copy()
 
-        # self.prog_bar = prog_bar
-
-        seg_values = seg_data.copy()
-        # seg_values = data_frame_segment[self.channel_name].values.flatten() #np.array(data_frame_segment) # data_frame_segment.values.flatten()
-        # seg_values = np.round(seg_values, decimals=20) # ### Don't know why but some features are getting NaN if this is not given, especially SpertralEntropy
-        # seg_values = 1000*seg_values
-
-        #check if the feate names are enum or string
-        if feature_names is None or len(feature_names)==0:
-            # print("Extracting all features.")
-            feature_names = DIHC_FeatureGroup.all.value
-        elif type(feature_names[0]) != DIHC_FeatureGroup:
-            print("Invalid features...")
-            exit(0)
-            # return
+        if feature_names is None or len(feature_names) == 0:
+            resolved_feature_names = DIHC_FeatureGroup.all.value
+        elif not isinstance(feature_names[0], DIHC_FeatureGroup):
+            raise TypeError("Invalid features specified. Elements must be instances of DIHC_FeatureGroup.")
         else:
-            # print("Extracting some features.")
             feature_names_copy = list(feature_names)
-            feature_names = []
+            extracted_names = []
             for itm in feature_names_copy:
-                feature_names.extend(itm.value)
+                extracted_names.extend(itm.value)
 
-            #remove duplicate and sort
-            feature_names_copy = list(set(feature_names))
+            unique_features = list(set(extracted_names))
             all_feature_names = DIHC_FeatureGroup.all.value
-            feature_names = [it for it in all_feature_names if it in feature_names_copy] 
+            resolved_feature_names = [it for it in all_feature_names if it in unique_features] 
 
-        # Generate corresponding features
-        if self.varbose_progress:
-            prog_bar = tqdm(feature_names, desc="Feature extraction started...")
-            # self.prog_bar.set_description("Feature extraction started...")
+        if self.verbose_progress:
+            prog_bar = tqdm(resolved_feature_names, desc="Feature extraction started...")
         else:
-            print(f"Feature extraction started...")
-        # self.prog_bar
-        feature_iterator = prog_bar if self.varbose_progress else feature_names
-        for feat in feature_iterator:
-            # print(f"---> {feat}")
-            # if self.signal_frequency==None and ('fd_' in feat or 'entropyProfiled_' in feat or 'spectral' in feat):
-            #     print(f'Signal frequency is not set for feature: {feat}')
-            #     continue
+            prog_bar = resolved_feature_names
 
-            if self.varbose_progress:
+        for feat in prog_bar:
+            if self.verbose_progress:
                 prog_bar.set_description(f"For segment: {seg_srl}, extracting feature: {feat} ||")
-            else:
-                print(f"For segment: {seg_srl}, extracting feature: {feat} ")
-            method = None
-            final_feat = None
+
             try:
                 final_feat = feat
-                final_data = seg_values
+                final_data: Union[np.ndarray, List[float]] = seg_values
 
-                #Reuse appropriate method call
                 if feat.startswith('fd_'):
-                    if (feat in (self.fd_linear_statistical)) or (feat in (self.fd_linear_statistical_binwise)):
-                        #FFT data for frequency domain features
-                        # print('HHHHHHHHHH', feat, final_feat, final_data[:5], max(final_data))
-                        data_dict = self.fd_data_dict
-                        if (self.fd_data_dict is None):
-                            data_dict = self.fd_spectralAmplitude(seg_values)
-                            self.fd_data_dict = data_dict
-                            # print('JJJJJJJJJJ', feat, final_feat, final_data[:5], max(final_data), max(self.fd_data_dict.values()))
+                    if (feat in self.fd_linear_statistical) or (feat in self.fd_linear_statistical_binwise):
+                        if self.fd_data_dict is None:
+                            self.fd_data_dict = self.fd_spectralAmplitude(seg_values)
 
-                        final_feat_list = (feat.split('_'))
+                        final_feat_list = feat.split('_')
                         fnl = len(final_feat_list)
-                        if fnl>1:
+                        if fnl > 1:
                             final_feat = final_feat_list[1]
-                            final_data = list(data_dict.values())
-
-                            tmp = data_dict.keys()
+                            final_data = list(self.fd_data_dict.values())
+                            freq_keys = list(self.fd_data_dict.keys())
 
                             if fnl > 2:
-                                tmp = [i for i in tmp if i in range(self.band_frequency_list[final_feat_list[2]][0], self.band_frequency_list[final_feat_list[2]][1])]
-                                final_data = [data_dict[x] for x in tmp]
+                                band_range = self.band_frequency_list[final_feat_list[2]]
+                                filtered_keys = [i for i in freq_keys if band_range[0] <= i < band_range[1]]
+                                final_data = [self.fd_data_dict[x] for x in filtered_keys]
 
-                        # print('KKKKKKKKK', feat, final_feat, final_data[:5], max(final_data))
-                    elif (feat in (self.fd_spectral_band_power)):
-                        final_feat_list = (feat.split('_'))
+                    elif feat in self.fd_spectral_band_power:
+                        final_feat_list = feat.split('_')
                         fnl = len(final_feat_list)
-
                         if fnl > 1:
                             final_feat = f'{final_feat_list[0]}_{final_feat_list[1]}'
-                            self.band = (0, self.signal_frequency)
-
+                            self.band = (0.0, self.signal_frequency)
                             if fnl > 2:
-                                self.band = (self.band_frequency_list[final_feat_list[2]][0], self.band_frequency_list[final_feat_list[2]][1])
+                                self.band = self.band_frequency_list[final_feat_list[2]]
 
                 elif feat.startswith('entropyProfiled_'):
-                    enProf = self.entropy_profile
                     if self.entropy_profile is None:
                         entProf_obj = DIHC_EntropyProfile()
                         enProf = entProf_obj.get_sample_entropy_profile(final_data)
@@ -214,497 +171,181 @@ class DIHC_FeatureExtractor:
                             dat2 = [np.float64(item) for sublist in dat for item in sublist]
                         else:
                             dat2 = [np.float64(item) for item in dat]
-                        enProf = np.array(dat2)
-                        # enProf = self._get_sample_entropy_profile(final_data)
-                        # dat = np.asarray(enProf)
-                        # dat2 = [0.0]
-                        # if len(enProf)>1:
-                        #     dat2 = [np.float64(item) for sublist in dat for item in sublist]
-                        # enProf = np.array(dat2)
-                        self.entropy_profile = enProf
+                        self.entropy_profile = np.array(dat2, dtype=np.float64)
 
-                    final_feat = (feat.split('_'))
-                    # fnl = len(final_feat)
-                    final_feat = final_feat[1]
+                    final_feat_list = feat.split('_')
+                    final_feat = final_feat_list[1]
+                    final_data = self.entropy_profile
 
-                    final_data = enProf
-
-                # print(feat, final_feat, seg_values, final_data)
-                # print(f'Calling... {final_feat} for feature {feat}')
                 method = getattr(self, final_feat)
 
-            except AttributeError:
-                print(f'Method for feature: {final_feat} is not implemented.')
-                raise NotImplementedError("Class `{}` does not implement `{}`".format(self.__class__.__name__, final_feat))
-                # return
+            except AttributeError as exc:
+                raise NotImplementedError(
+                    f"Class `{self.__class__.__name__}` does not implement `{final_feat}`"
+                ) from exc
 
-            # feat_val = method(final_data)
-            # print(feat, final_data, type(final_data), feat_val, type(feat_val))
-            # print(feat, type(final_data), len(final_data), final_data)
+            feat_val = 0.0
+            final_data_arr = np.asarray(final_data, dtype=np.float64)
+            is_invariant = np.all(final_data_arr == final_data_arr[0]) if final_data_arr.size > 1 else True
+            
+            if not is_invariant:
+                feat_val = method(final_data_arr)
 
-            feat_val = 0
-            result = np.all(final_data == final_data[0]) if len(final_data)>1 else True
-            if not result:
-                final_data = np.asarray(final_data, dtype=np.float64)
-                feat_val = method(final_data)
-                # # Handling nan data
-                # if feat_val == np.nan:
-                #     feat_val = 0
+            feature_values.append([round(feat_val, 2)])
 
-            # print(f'{feat} -- {feat_val} -- {type(feat_val)}')
-            feat_val = round(feat_val, 2)
-            # feat_val = round(feat_val, 16)
-            # print(f'{feat} -- {feat_val}')
-            feature_values.append([feat_val])
-
-        if self.varbose_progress:
-            prog_bar.set_description(f"Feature extraction finished...")
+        if self.verbose_progress and hasattr(prog_bar, 'close'):
             prog_bar.close()
-        else:
-            print(f"Feature extraction finished...")
 
-        # print(f'{feature_names} -- {feature_values}')
-        np_feat_value = np.array(feature_values)
-        np_feat_value = np_feat_value.T
-
-        # print(f'{len(feature_names)} {np_feat_value.shape}')
-        # print(f'{np_feat_value}')
-        # print(f'data--- {np_feat_value} {feature_names}')
-
+        np_feat_value = np.array(feature_values).T
         all_features = pd.DataFrame()
-        if len(feature_names)>0 and len(np_feat_value)>0:
-            all_features = pd.DataFrame(np_feat_value, columns=feature_names)
-        # print(f'{all_features}')
+        if len(resolved_feature_names) > 0 and len(np_feat_value) > 0:
+            all_features = pd.DataFrame(np_feat_value, columns=resolved_feature_names)
 
-        # ##########################################################
-        # all_features = all_features[all_features != np.inf]
-        # print(f'Data and type: ', type(all_features), all_features['spectralEntropy'])
-        # if all_features.isnull().values.any():
-        #     print(f'Infinity found: ', all_features)
-
-        # Exceptional data management
+        # Handling exceptional floating data limits
         if self.manage_exceptional_data == 0:
             all_features = all_features[all_features != np.inf]
         elif self.manage_exceptional_data == 1:
-            all_features = all_features[all_features != np.inf]
-            all_features = all_features.fillna(0)
+            all_features = all_features[all_features != np.inf].fillna(0)
         elif self.manage_exceptional_data == 2:
-            all_features = all_features[all_features != np.inf]
-            all_features = all_features.dropna()
+            all_features = all_features[all_features != np.inf].dropna()
         elif self.manage_exceptional_data == 3:
             all_features = all_features[all_features != np.inf]
             all_features = all_features.fillna(all_features.mean()) 
 
         return all_features 
 
-###########################################################################
-### Time Domain Features
+    # ==========================================
+    # Time Domain Metric Processing
+    # ==========================================
 
-    ### Total value of the segment
-    def total(self, data):
-        tot = np.sum(data)
-        return tot
+    def total(self, data: np.ndarray) -> float:
+        return float(np.sum(data))
 
-    ### Summation value of the segment
-    def summation(self, data):
-        avg = np.sum(data)
-        return avg
+    def summation(self, data: np.ndarray) -> float:
+        return float(np.sum(data))
 
-    ### Average value of the segment
-    def average(self, data):
-        avg = np.mean(data)
-        return avg
+    def average(self, data: np.ndarray) -> float:
+        return float(np.mean(data))
 
-    ### Minimum value of the segment
-    def minimum(self, data):
-        min = np.min(data)
-        return min
+    def minimum(self, data: np.ndarray) -> float:
+        return float(np.min(data))
 
-    ### Maximum value of the segment
-    def maximum(self, data):
-        max = np.max(data)
-        return max
+    def maximum(self, data: np.ndarray) -> float:
+        return float(np.max(data))
 
-    ### Mean value of the segment
-    def mean(self, data):
-        mean = np.mean(data)
-        return mean
+    def mean(self, data: np.ndarray) -> float:
+        return float(np.mean(data))
 
-    ### Median value of the segment
-    def median(self, data):
-        med = np.median(data)
-        return med
+    def median(self, data: np.ndarray) -> float:
+        return float(np.median(data))
 
-    ### Standard Deviation value of the segment
-    def standardDeviation(self, data):
-        std = np.std(data)
-        return std
+    def standardDeviation(self, data: np.ndarray) -> float:
+        return float(np.std(data))
 
-    ### Variance value of the segment
-    def variance(self, data):
-        var = np.var(data)
-        return var
+    def variance(self, data: np.ndarray) -> float:
+        return float(np.var(data))
 
-    ### kurtosis value of the segment
-    def kurtosis(self, data):
-        # kurtosis(y1, fisher=False)
-        kur = sp.stats.kurtosis(data)
-        return kur
+    def kurtosis(self, data: np.ndarray) -> float:
+        return float(sp.stats.kurtosis(data))
 
-    ### skewness value of the segment
-    def skewness(self, data):
-        skw = sp.stats.skew(data)
-        return skw
+    def skewness(self, data: np.ndarray) -> float:
+        return float(sp.stats.skew(data))
 
-    ### peak_or_Max value of the segment
-    def peakOrMax(self, data):
-        peak = self.maximum(data)
-        return peak
+    def peakOrMax(self, data: np.ndarray) -> float:
+        return self.maximum(data)
 
-    ### numberOfPeaks value of the segment
-    def numberOfPeaks(self, data):
-        # peaks, _ = find_peaks(x, distance=20)
-        # peaks2, _ = find_peaks(x, prominence=1)  # BEST!
-        # peaks3, _ = find_peaks(x, width=20)
-        # peaks4, _ = find_peaks(x, threshold=0.4)
-        numPeak = len(sig.find_peaks(data))
-        return numPeak
+    def numberOfPeaks(self, data: np.ndarray) -> int:
+        peaks, _ = sig.find_peaks(data)
+        return len(peaks)
 
-    ### numberOfZeroCrossing value of the segment
-    def numberOfZeroCrossing(self, data):
-        # numZC1 = np.where(np.diff(np.sign(data)))[0]
-        numZC = num_zerocross(data) #Antropy package
-        return numZC #len(numZC1)
+    def numberOfZeroCrossing(self, data: np.ndarray) -> int:
+        return int(num_zerocross(data))
 
-    ### positiveToNegativeSampleRatio value of the segment
-    def positiveToNegativeSampleRatio(self, data):
-        pnSampRatio = 0
+    def positiveToNegativeSampleRatio(self, data: np.ndarray) -> float:
         try:
-            pnSampRatio = (np.sum(np.array(data) >= 0, axis=0)) / (np.sum(np.array(data) < 0, axis=0))
+            pos = np.sum(data >= 0)
+            neg = np.sum(data < 0)
+            return float(pos / neg) if neg != 0 else 0.0
         except ZeroDivisionError:
-            pnSampRatio = 0
-        return pnSampRatio
+            return 0.0
 
-    ### positiveToNegativeSampleRatio value of the segment
-    def positiveToNegativePeakRatio(self, data):
-        pnPeakRatio = 0
+    def positiveToNegativePeakRatio(self, data: np.ndarray) -> float:
         try:
-            pnPeakRatio = (len(sig.find_peaks(data))) / (len(sig.find_peaks(-data)))
+            pos_peaks = len(sig.find_peaks(data)[0])
+            neg_peaks = len(sig.find_peaks(-data)[0])
+            return float(pos_peaks / neg_peaks) if neg_peaks != 0 else 0.0
         except ZeroDivisionError:
-            pnPeakRatio = 0
-        return pnPeakRatio
+            return 0.0
 
-    ### meanAbsoluteValue value of the segment
-    def meanAbsoluteValue(self, data):
-        meanAbsVal = self.mean(abs(data))
-        return meanAbsVal
+    def meanAbsoluteValue(self, data: np.ndarray) -> float:
+        return self.mean(np.abs(data))
 
+    # ==========================================
+    # Non-linear Entropy Architectures
+    # ==========================================
 
-
-############ Entropy
-    # ### Collected from Antropy and pyeeg package
-
-    def approximateEntropy(self, data):
-        ae = 0
+    def approximateEntropy(self, data: np.ndarray) -> float:
         try:
-            ae = app_entropy(data)
+            return float(app_entropy(data))
         except ZeroDivisionError:
-            ae = 0
-        return ae
+            return 0.0
 
-    def sampleEntropy(self, data):
+    def sampleEntropy(self, data: np.ndarray) -> float:
         if len(data) < 5000:
             return 0.0
-        se = 0
         try:
-            se = sample_entropy(data)
+            return float(sample_entropy(data))
         except ZeroDivisionError:
-            se = 0
-        return se
+            return 0.0
 
-    def permutationEntropy(self, data):
-        pe = 0
+    def permutationEntropy(self, data: np.ndarray) -> float:
         try:
-            pe = perm_entropy(data)
+            return float(perm_entropy(data))
         except ZeroDivisionError:
-            pe = 0
-        return pe
+            return 0.0
 
-    def spectralEntropy(self, data):
-        sf = self.signal_frequency
-        se = 0
+    def spectralEntropy(self, data: np.ndarray) -> float:
         try:
-            # se = spectral_entropy(data, sf)
-            se = spectral_entropy(data, sf, method='welch')
+            return float(spectral_entropy(data, self.signal_frequency, method='welch'))
         except ZeroDivisionError:
-            se = 0
-        return se
+            return 0.0
 
-    def singularValueDecompositionEntropy(self, data):
-        svd_e = 0
+    def singularValueDecompositionEntropy(self, data: np.ndarray) -> float:
         try:
-            svd_e = svd_entropy(data)
+            return float(svd_entropy(data))
         except ZeroDivisionError:
-            svd_e = 0
-        return svd_e
+            return 0.0
 
-    ############ Fracta dimension
-    # Collected from Antropy and pyeeg packages
-
-    def hjorthMobility(self, data):
-        hjm = 0
+    def fuzzyEntropy(self, data: np.ndarray, m: int = 2, tau: int = 1, r: float = 0.2) -> float:
         try:
-            hjm, _ = hjorth_params(data)
-        except ZeroDivisionError:
-            hjm = 0
-        return hjm
+            return float(compute_fuzzy_entropy_jit(np.asarray(data).flatten(), m, tau, r))
+        except Exception:
+            return 0.0
 
-    def hjorthComplexity(self, data):
-        hjc = 0
-        try:
-            _, hjc = hjorth_params(data)
-        except ZeroDivisionError:
-            hjc = 0
-        return hjc
+    def distributionEntropy(self, data: np.ndarray, m: int = 2, M: int = 500) -> float:
+        flat_data = np.asarray(data).flatten()
+        if len(flat_data) <= m:
+            raise ValueError("Input data length must be strictly greater than embedding dimension m.")
+        return float(compute_distribution_entropy_jit(flat_data, m, M))
 
-    def hurstExponent(self, data):
-        hre = 0
-        try:
-            hre = pyeeg.hurst(data)
-        except ZeroDivisionError:
-            hre = 0
-        return hre
+    def distributionEntropy4(self, data: np.ndarray) -> float:
+        return self.distributionEntropy(data, m=4)
 
-    def fisherInfo(self, data, tau=1, m=2):
-        fsi = 0
-        try:
-            fsi = pyeeg.fisher_info(data, tau, m)
-        except ZeroDivisionError:
-            fsi = 0
-        return fsi
+    def distributionEntropy6(self, data: np.ndarray) -> float:
+        return self.distributionEntropy(data, m=6)
 
-    def lempelZivComplexity(self, data):
-        lzc = 0
-        try:
-            lzc = lziv_complexity(data)
-        except ZeroDivisionError:
-            lzc = 0
-        return lzc
+    def distributionEntropy8(self, data: np.ndarray) -> float:
+        return self.distributionEntropy(data, m=8)
 
-    def petrosianFd(self, data):
-        pfd = 0
-        try:
-            pfd = petrosian_fd(data)
-        except ZeroDivisionError:
-            pfd = 0
-        return pfd
+    def distributionEntropy10(self, data: np.ndarray) -> float:
+        return self.distributionEntropy(data, m=10)
 
-    def katzFd(self, data):
-        kfd = 0
-        try:
-            kfd = katz_fd(data)
-        except ZeroDivisionError:
-            kfd = 0
-        return kfd
-
-    def higuchiFd(self, data):
-        hfd = 0
-        try:
-            hfd = higuchi_fd(data)
-        except ZeroDivisionError:
-            hfd = 0
-        return hfd
-
-    def detrendedFluctuation(self, data):
-        dfl = 0
-        try:
-            dfl = detrended_fluctuation(data)
-        except ZeroDivisionError:
-            dfl = 0
-        return dfl 
-    
-
-    # ## ######## Fuzzy entropy (Python implementation)
-    # def fuzzyEntropy(self, data,  m=2, tau=1, r=0.2):
-    #     """
-    #     Fuzzy Entropy calculation in Python.
-    #
-    #     Parameters:
-    #         data : array-like
-    #             Input signal (1D array).
-    #         m : int
-    #             Embedding dimension.
-    #         tau : int
-    #             Time delay.
-    #         r : float
-    #             Tolerance (as a fraction of std of s).
-    #
-    #     Returns:
-    #         fuzz_ent : float
-    #             Fuzzy entropy value.
-    #     """
-    #     data = np.asarray(data).flatten()
-    #     r = r * np.std(data)
-    #     N = len(data)
-    #
-    #     # Indices for embedding
-    #     ind_m = np.array([np.arange(i, i + m * tau, tau) for i in range(N - m * tau)])
-    #     ind_a = np.array([np.arange(i, i + (m + 1) * tau, tau) for i in range(N - m * tau)])
-    #
-    #     ym = data[ind_m]
-    #     ya = data[ind_a]
-    #
-    #     # Compute Chebyshev distance
-    #     cheb_ym = pdist(ym, metric='chebyshev')
-    #     cheb_ya = pdist(ya, metric='chebyshev')
-    #
-    #     cm = np.sum(np.exp(-np.log(2) * (cheb_ym / r) ** 2)) * 2 / (ym.shape[0] * (ym.shape[0] - 1))
-    #     ca = np.sum(np.exp(-np.log(2) * (cheb_ya / r) ** 2)) * 2 / (ya.shape[0] * (ya.shape[0] - 1))
-    #
-    #     if cm == 0 or ca == 0:
-    #         return np.nan  # Avoid log(0)
-    #
-    #     fuzz_ent = -np.log(ca / cm)
-    #     return fuzz_ent
-
-
-    def fuzzyEntropy(self, data,  m=2, tau=1, r=0.2):
-        data = np.asarray(data).flatten()
-        # data = data.astype(np.float64)
-        fuzz_ent = 0
-        try:
-            fuzz_ent = compute_fuzzy_entropy_jit(data, m, tau, r)
-        except:
-            fuzz_ent = 0
-        return fuzz_ent
-
-
-
-    # ## ######## Distribution entropy (Python implementation)
-    # def distributionEntropy(self, data, m=2, M=500):
-    #     """
-    #     Compute Distribution Entropy (DistEn) using Peng Li's method.
-        
-    #     Parameters:
-    #         data : array-like
-    #             The input signal.
-    #         m : int
-    #             Embedding dimension (e.g., 2).
-    #         M : int
-    #             Number of bins for histogram (e.g., 500).
-        
-    #     Returns:
-    #         dist_ent : float
-    #             Distribution entropy value.
-    #     """
-    #     data = np.asarray(data).flatten()
-    #     N = len(data)
-
-    #     # Step 1: Form template matrix for embedding dimension m
-    #     template_matrix = np.array([data[i:N - m + i + 1] for i in range(m)]).T
-    #     mat_len = template_matrix.shape[0]
-
-    #     # Step 2: Calculate Chebyshev distances between all template vectors
-    #     all_distances = []
-    #     for i in range(mat_len):
-    #         template_vec = template_matrix[i]
-    #         match_mat = np.delete(template_matrix, i, axis=0)
-    #         # Chebyshev (max absolute) distance
-    #         d = np.max(np.abs(match_mat - template_vec), axis=1)
-    #         all_distances.extend(d)
-        
-    #     all_distances = np.array(all_distances)
-
-    #     # Step 3: Histogram binning
-    #     freq_count, _ = np.histogram(all_distances, bins=M)
-    #     prob_freq = freq_count / len(all_distances)
-    #     prob_nonzero = prob_freq[prob_freq > 0]
-
-    #     # Step 4: Compute distribution entropy
-    #     entropy = -np.sum(prob_nonzero * np.log2(prob_nonzero))
-    #     dist_ent = entropy / np.log2(M)
-        
-    #     return dist_ent
-    
-
-
-    # def distributionEntropy(self, data, m=2, M=500):
-    #     """
-    #     Python implementation of Distribution Entropy as per Peng Li's method.
-    #     Parameters:
-    #         data : 1D numpy array
-    #         m : embedding dimension (typically 2)
-    #         M : number of bins (typically 500)
-    #     Returns:
-    #         dist_en : Distribution Entropy value (should match MATLAB values closely)
-    #     """
-    #     data = np.asarray(data).flatten()
-    #     N = len(data)
-    #     if N <= m:
-    #         raise ValueError("Input data length must be greater than embedding dimension m.")
-    #
-    #     # Construct embedding matrix for dimension m
-    #     tmplt_mat = np.array([data[i:N - m + i] for i in range(m)]).T
-    #     mat_len = tmplt_mat.shape[0]
-    #
-    #     # Compute Chebyshev distances
-    #     all_dist_m = []
-    #     for i in range(mat_len):
-    #         tmpl_vec = tmplt_mat[i]
-    #         match_mat = np.delete(tmplt_mat, i, axis=0)
-    #         tmpl_repeated = np.tile(tmpl_vec, (mat_len - 1, 1))
-    #         dist = np.max(np.abs(tmpl_repeated - match_mat), axis=1)
-    #         all_dist_m.extend(dist)
-    #
-    #     all_dist_m = np.array(all_dist_m)
-    #
-    #     # Fixed bin histogram with M bins
-    #     freq_count, _ = np.histogram(all_dist_m, bins=M, range=(np.min(all_dist_m), np.max(all_dist_m)))
-    #     prob = freq_count / len(all_dist_m)
-    #
-    #     # Compute Distribution Entropy
-    #     nonzero_prob = prob[prob > 0]
-    #     y = nonzero_prob * np.log2(nonzero_prob)
-    #     dist_en = -np.sum(y) / np.log2(M)
-    #
-    #     return dist_en
-
-    def distributionEntropy(self, data, m=2, M=500):
-        data = np.asarray(data).flatten()
-        N = len(data)
-        if N <= m:
-            raise ValueError("Input data length must be greater than embedding dimension m.")
-
-        dist_en = compute_distribution_entropy_jit(data, m, M)
-        return dist_en
-
-
-
-    def distributionEntropy4(self, data, m=4):
-        return self.distributionEntropy(data, m=m)
-    def distributionEntropy6(self, data, m=6):
-        return self.distributionEntropy(data, m=m)
-    def distributionEntropy8(self, data, m=8):
-        return self.distributionEntropy(data, m=m)
-    def distributionEntropy10(self, data, m=10):
-        return self.distributionEntropy(data, m=m)
-    
-
-
-
-    def shannonEntropy(self, data, m=2):
-        bases = collections.Counter([tmp_base for tmp_base in data])
-        # define distribution
+    def shannonEntropy(self, data: np.ndarray, m: int = 2) -> float:
+        bases = collections.Counter(data)
         dist = [i / sum(bases.values()) for i in bases.values()]
+        return float(scipyEntropy(dist, base=m))
 
-        # use scipy to calculate entropy
-        entropy_value = scipyEntropy(dist, base=m)
-
-        return entropy_value
-
-
-    def _x_log2_x(self, data):
-        """ Return x * log2(x) and 0 if x is 0."""
+    def _x_log2_x(self, data: np.ndarray) -> np.ndarray:
         res = data * np.log2(data)
         if np.size(data) == 1:
             if np.isclose(data, 0.0):
@@ -713,268 +354,148 @@ class DIHC_FeatureExtractor:
             res[np.isclose(data, 0.0)] = 0.0
         return res
 
-
-    def renyiEntropy(self, data, alpha=2):
-        assert alpha >= 0, "Error: renyi_entropy only accepts values of alpha >= 0, but alpha = {}.".format(alpha)  # DEBUG
+    def renyiEntropy(self, data: np.ndarray, alpha: float = 2.0) -> float:
+        assert alpha >= 0, f"renyi_entropy requires values of alpha >= 0, but alpha = {alpha}."
         if np.isinf(alpha):
-            # XXX Min entropy!
-            return - np.log2(np.max(data))
-        elif np.isclose(alpha, 0):
-            # XXX Max entropy!
-            return np.log2(len(data))
-        elif np.isclose(alpha, 1):
-            # XXX Shannon entropy!
-            return - np.sum(self._x_log2_x(data))
+            return float(-np.log2(np.max(data)))
+        elif np.isclose(alpha, 0.0):
+            return float(np.log2(len(data)))
+        elif np.isclose(alpha, 1.0):
+            return float(-np.sum(self._x_log2_x(data)))
         else:
-            return (1.0 / (1.0 - alpha)) * np.log2(np.sum(data ** alpha)) 
+            return float((1.0 / (1.0 - alpha)) * np.log2(np.sum(data ** alpha))) 
 
+    # ==========================================
+    # Fractal Dimension Processing
+    # ==========================================
 
-### Frequency Domain Features
+    def hjorthMobility(self, data: np.ndarray) -> float:
+        try:
+            hjm, _ = hjorth_params(data)
+            return float(hjm)
+        except ZeroDivisionError:
+            return 0.0
 
-    ##Bandpass filtering
-    def _butter_bandpass(self, lowcut, highcut, fs, order=5):
+    def hjorthComplexity(self, data: np.ndarray) -> float:
+        try:
+            _, hjc = hjorth_params(data)
+            return float(hjc)
+        except ZeroDivisionError:
+            return 0.0
+
+    def hurstExponent(self, data: np.ndarray) -> float:
+        try:
+            return float(pyeeg.hurst(data))
+        except ZeroDivisionError:
+            return 0.0
+
+    def fisherInfo(self, data: np.ndarray, tau: int = 1, m: int = 2) -> float:
+        try:
+            return float(pyeeg.fisher_info(data, tau, m))
+        except ZeroDivisionError:
+            return 0.0
+
+    def lempelZivComplexity(self, data: np.ndarray) -> float:
+        try:
+            return float(lziv_complexity(data))
+        except ZeroDivisionError:
+            return 0.0
+
+    def petrosianFd(self, data: np.ndarray) -> float:
+        try:
+            return float(petrosian_fd(data))
+        except ZeroDivisionError:
+            return 0.0
+
+    def katzFd(self, data: np.ndarray) -> float:
+        try:
+            return float(katz_fd(data))
+        except ZeroDivisionError:
+            return 0.0
+
+    def higuchiFd(self, data: np.ndarray) -> float:
+        try:
+            return float(higuchi_fd(data))
+        except ZeroDivisionError:
+            return 0.0
+
+    def detrendedFluctuation(self, data: np.ndarray) -> float:
+        try:
+            return float(detrended_fluctuation(data))
+        except ZeroDivisionError:
+            return 0.0 
+
+    # ==========================================
+    # Frequency Domain Features & Filtering
+    # ==========================================
+
+    def _butter_bandpass(self, lowcut: float, highcut: float, fs: float, order: int = 5) -> Tuple[np.ndarray, np.ndarray]:
         nyq = 0.5 * fs
         low = lowcut / nyq
         high = highcut / nyq
-        tpl_res = butter(order, [low, high], btype='band')
-        b, a = tpl_res[0], tpl_res[1]
+        b, a = butter(order, [low, high], btype='band')
         return b, a
 
-
-    def _butter_bandpass_filter(self, data, lowcut, highcut, fs, order=5):
+    def _butter_bandpass_filter(self, data: np.ndarray, lowcut: float, highcut: float, fs: float, order: int = 5) -> np.ndarray:
         b, a = self._butter_bandpass(lowcut, highcut, fs, order=order)
-        y = lfilter(b, a, data)
-        return y
+        return lfilter(b, a, data)
 
-
-    ##Fast Faurier Transformation
-    def _fast_faurier_transformation(self, data, fs, fft_type=2):
-        feat_data = None
-
-        if fft_type==0:
-            #Normal FFT using scipy
-            fft_data = fft.fft(data)
-            freqs = fft.fftfreq(len(data)) * fs
-            feat_data = {freqs[i]: fft_data[i] for i in range(len(freqs))}
-        elif fft_type==1:
-            #FFT for Amplitude calculation using fftpack
-            fft_data = fftpack.fft(data)
-            freqs = fftpack.fftfreq(len(data)) * fs
-            feat_data = {freqs[i]: fft_data[i] for i in range(len(freqs))}
-        elif fft_type==2:
-            #FFT for Amplitude calculation using fftpack
+    def _fast_fourier_transformation(self, data: np.ndarray, fs: float, fft_type: int = 2) -> Dict[float, Any]:
+        if fft_type == 0:
+            fft_data = sp.fft.fft(data)
+            freqs = sp.fft.fftfreq(len(data)) * fs
+            return {freqs[i]: fft_data[i] for i in range(len(freqs))}
+        elif fft_type == 1:
+            fft_data = sp.fftpack.fft(data)
+            freqs = sp.fftpack.fftfreq(len(data)) * fs
+            return {freqs[i]: fft_data[i] for i in range(len(freqs))}
+        else:
             fft_data = np.abs(np.fft.fft(data))
             freqs = np.fft.fftfreq(len(data), d=1.0 / fs)
-            feat_data = {freqs[i]: fft_data[i] for i in range(len(freqs))}
+            return {freqs[i]: fft_data[i] for i in range(len(freqs))}
 
-        return feat_data
-
-
-    ### Original Frequency domain features
-    def fd_spectralAmplitude(self, data):
+    def fd_spectralAmplitude(self, data: np.ndarray) -> Dict[float, Any]:
         filtered_data = data
-        sample_per_second = self.sample_per_second
-
         if self.filtering_enabled:
-            lowcut = self.lowcut
-            highcut = self.highcut
-            filtered_data = self._butter_bandpass_filter(data, lowcut, highcut, sample_per_second, order=6)
+            filtered_data = self._butter_bandpass_filter(
+                data, self.lowcut, self.highcut, self.sample_per_second, order=6
+            )
+        return self._fast_fourier_transformation(filtered_data, self.sample_per_second)
 
-        feat_data = self._fast_faurier_transformation(data, sample_per_second)
-
-        return feat_data
-
-
-    ### Power of a signal or signal band
-    ### @Author: raphaelvallat (Author of Antropy package) Source:- https://raphaelvallat.com/bandpower.html
-    # def fd_bandPower(self, data, method='multitaper', window_sec=None, relative=False):
-    #     """Compute the average power of the signal x in a specific frequency band.
-    #     Requires MNE-Python >= 0.14.
-    #     Parameters
-    #     ----------
-    #     data : 1d-array :- Input signal in the time-domain.
-    #     sf : float :- Sampling frequency of the data.
-    #     band : list :- Lower and upper frequencies of the band of interest.
-    #     method : string :- Periodogram method: 'welch' or 'multitaper'
-    #     window_sec : float :- Length of each window in seconds. Useful only if method == 'welch'. If None, window_sec = (1 / min(band)) * 2.
-    #     relative : boolean :-If True, return the relative power (= divided by the total power of the signal). If False (default), return the absolute power.
-    #     ------
-    #     Return
-    #     ------
-    #     bp : float :- Absolute or relative band power.
-    #     ------
-    #     Use
-    #     ------
-    #     # Multitaper delta power
-    #     bp = fd_bandpower(data, sf, [0.5, 4], 'multitaper')
-    #     311.559, and 0.790 (for relative band power)
-    #     """
-    #     sf = self.signal_frequency
-    #     band = self.band
-    #
-    #     band = np.asarray(band)
-    #     low, high = band
-    #     # Compute the modified periodogram (Welch)
-    #     freqs, psd = 0, 0
-    #     if method == 'welch':
-    #         if window_sec is not None:
-    #             nperseg = window_sec * sf
-    #         else:
-    #             nperseg = (2 / low) * sf
-    #         freqs, psd = welch(data, sf, nperseg=nperseg)
-    #     elif method == 'multitaper':
-    #         psd, freqs = psd_array_multitaper(data, sf, adaptive=True, normalization='full', verbose=0)
-    #     # Frequency resolution
-    #     freq_res = freqs[1] - freqs[0]
-    #     # Find index of band in frequency vector
-    #     idx_band = np.logical_and(freqs >= low, freqs <= high)
-    #     # Integral approximation of the spectrum using parabola (Simpson's rule)
-    #     bp = simps(psd[idx_band], dx=freq_res)
-    #     if relative:
-    #         bp /= simps(psd, dx=freq_res)
-    #     return bp
-
-    def fd_bandPower(self, data, method='multitaper', window_sec=None, relative=False):
-        """Compute the average power of the signal x in a specific frequency band."""
+    def fd_bandPower(self, data: np.ndarray, method: str = 'multitaper', window_sec: Optional[float] = None, relative: bool = False) -> float:
         sf = self.signal_frequency
-        band = self.band
+        low, high = self.band
 
-        # Input validation
-        if len(data) < 2:  # Need at least 2 points for frequency analysis
-            return 0
+        if len(data) < 2:
+            return 0.0
 
-        band = np.asarray(band)
-        low, high = band
-
-        # Compute the modified periodogram (Welch)
         try:
             if method == 'welch':
-                if window_sec is not None:
-                    nperseg = int(window_sec * sf)
-                else:
-                    nperseg = int((2 / low) * sf)
-                # Ensure nperseg is valid
+                nperseg = int(window_sec * sf) if window_sec is not None else int((2 / low) * sf) if low != 0 else len(data)
                 nperseg = min(len(data), nperseg)
                 if nperseg < 2:
-                    return 0
+                    return 0.0
                 freqs, psd = welch(data, sf, nperseg=nperseg)
-            elif method == 'multitaper':
-                psd, freqs = psd_array_multitaper(data, sf, adaptive=True,
-                                                  normalization='full', verbose=0)
+            else:
+                psd, freqs = psd_array_multitaper(data, sf, adaptive=True, normalization='full', verbose=0)
 
-            # Verify we got valid results
             if len(psd) == 0 or len(freqs) == 0:
-                return 0
+                return 0.0
 
-            # Frequency resolution
             freq_res = freqs[1] - freqs[0]
-
-            # Find index of band in frequency vector
             idx_band = np.logical_and(freqs >= low, freqs <= high)
 
-            # Check if we have any frequencies in our band
             if not np.any(idx_band):
-                return 0
+                return 0.0
 
-            # Integral approximation of the spectrum using parabola (Simpson's rule)
-            bp = simps(psd[idx_band], dx=freq_res)
+            # Safe evaluation using upgraded simpson integration
+            bp = float(simpson(psd[idx_band], dx=freq_res))
 
             if relative:
-                total_power = simps(psd, dx=freq_res)
-                bp = bp / total_power if total_power != 0 else 0
+                total_power = simpson(psd, dx=freq_res)
+                bp = bp / total_power if total_power != 0 else 0.0
 
             return bp
 
-        except Exception as e:
-            # Log the error if needed
-            # print(f"Error in band power calculation: {str(e)}")
-            return 0
-
-
-
-
-
-    # ### Minimum value of the segment
-    # def fd_minimum(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     min = np.min(data)
-    #     return min
-    #
-    # ### Maximum value of the segment
-    # def fd_maximum(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     max = np.max(data)
-    #     return max
-    #
-    # ### Mean value of the segment
-    # def fd_mean(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     mean = np.mean(data)
-    #     return mean
-    #
-    # ### Median value of the segment
-    # def fd_median(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     med = np.median(data)
-    #     return med
-    #
-    # ### Summation value of the segment
-    # def fd_summation(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     avg = np.sum(data)
-    #     return avg
-    #
-    # ### Average value of the segment
-    # def fd_average(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     avg = self.mean(data)
-    #     return avg
-    #
-    # ### Standard Deviation value of the segment
-    # def fd_standardDeviation(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     std = np.std(data)
-    #     return std
-    #
-    # ### Variance value of the segment
-    # def fd_variance(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     var = np.var(data)
-    #     return var
-    #
-    # ### kurtosis value of the segment
-    # def fd_kurtosis(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     # kurtosis(y1, fisher=False)
-    #     kur = sp.stats.kurtosis(data)
-    #     return kur
-    #
-    # ### skewness value of the segment
-    # def fd_skewness(self, data):
-    #     data = self.fd_spectralAmplitude(data)
-    #     data = data.values()
-    #     skw = sp.stats.skew(data)
-    #     return skw
-
-### Time-Frequency Domain Features
-
-### Wevlate Domain Features
-
-
-
-
-####################################################################
-
-
-
-
-
+        except Exception:
+            return 0.0
